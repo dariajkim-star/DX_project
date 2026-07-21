@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[DX 3단계] 벡터화 (임베딩) (v2.5)
+[DX 3단계] 벡터화 (임베딩) (v2.8)
 - 방법 A: TF-IDF (가볍고 빠름, 해석 쉬움) — 키워드 분석용 독립 산출물
   ※ 05단계 LDA 폴백은 이 파일을 사용하지 않고 자체 CountVectorizer를 씀 (M1 명시)
 - 방법 B: Ko-SBERT 딥러닝 임베딩 (의미 기반, BERTopic/군집에 유리)
@@ -27,7 +27,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
-SBERT_MODEL = "jhgan/ko-sroberta-multitask"
+from model_config import SBERT_MODEL  # v2.8: 모델 설정 단일 소스
 
 
 def hash_documents(reviews) -> str:

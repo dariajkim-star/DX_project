@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[DX 5단계] Pain Point 도출 (감성 분석 + 토픽 모델링) (v2.5)
+[DX 5단계] Pain Point 도출 (감성 분석 + 토픽 모델링) (v2.8)
 - 감성: 딥러닝 모델(가능 시) 또는 평점 기반(rating<=3) 폴백 — 사용된 방식을
   sentiment_method 로 기록 (v2.2)
 - 토픽: BERTopic(가능 시) 또는 LDA 폴백
@@ -35,8 +35,8 @@ OUT_DIR.mkdir(exist_ok=True)
 plt.rcParams["font.family"] = ["Malgun Gothic", "AppleGothic", "NanumGothic", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
-# v2.2: 허용 라벨 명시 — 모델 교체로 라벨 체계가 바뀌면 조용히 오분류하지 않고 폴백
-LABEL_MAP = {"LABEL_0": "neg", "LABEL_1": "pos"}  # matthewburke/korean_sentiment 기준
+# v2.8: 모델·라벨 설정은 model_config 단일 소스에서
+from model_config import LABEL_MAP, SENTIMENT_MODEL, SBERT_MODEL as EXPECTED_SBERT_MODEL
 
 
 def hash_documents(reviews) -> str:
@@ -53,7 +53,7 @@ def filter_negative(df: pd.DataFrame) -> pd.DataFrame:
     try:
         from transformers import pipeline
         clf = pipeline("sentiment-analysis",
-                       model="matthewburke/korean_sentiment", truncation=True)
+                       model=SENTIMENT_MODEL, truncation=True)
         preds = clf(df["review"].astype(str).tolist(), batch_size=32)
         unknown = {p["label"] for p in preds} - set(LABEL_MAP)
         if unknown:
@@ -77,9 +77,6 @@ def filter_negative(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------- (2) 토픽 모델링 ----------
-EXPECTED_SBERT_MODEL = "jhgan/ko-sroberta-multitask"  # 03_embedding.py와 일치해야 함
-
-
 def load_valid_embeddings(df: pd.DataFrame):
     """v2.2: 문서 해시가 일치할 때만 임베딩 사용 — 행 수만 같은 과거 임베딩 차단.
     v2.3: 손상 파일은 폴백(전체 중단 아님), 모델명·row_count·배열 무결성도 검증."""
