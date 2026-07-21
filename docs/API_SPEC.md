@@ -17,6 +17,11 @@
 | `05_painpoint.py` | — | reviews_clean.csv + 메타 체인 | `data/painpoints.csv`, `strengths.csv`, `painpoints_meta.json`, `out/topic_freq.png` | 계보 검증 실패(run_id/해시/status/source_type), 부정 리뷰 <5건, 전량 노이즈 |
 | `06_visualize.py` | `--demo` | painpoints.csv, `data/cx_scores.csv`(선택) | `out/priority_matrix.png`, `radar_cx.png` | painpoints 수치 범위 위반, cx_scores 스키마/1~5 범위 위반. **실패 시 해당 PNG 삭제** |
 | `moa_orchestrator.py` | — | data/ 번들 전체 | `out_moa/<ts>/A~F.md`, `*_FAILED.md`, `*_SKIPPED.md`, `run_manifest.json` | `OPENAI_API_KEY` 부재. 게이트 실패는 중단이 아니라 **가설 모드 강등** |
+| `07_wordcloud_sentiment.py` | `--keyword`, `--top` | reviews_raw.csv (+네이버 API 키 시 키워드 수집) | `out/wordcloud_neg.png`, `sentiment_dist.png`, `data/wordcloud_freq.csv`, `keyword_lge.csv` | reviews_raw 부재 |
+| `crawl_playstore.py` | `--app-id`, `--alias`, `--max` | (플레이스토어 공개 API) | `data/crawl_playstore_<별칭>.csv` + `_manifest.json` (SHA-256 포함), 2,000건마다 체크포인트 | — (토큰 소진 시 조기 종료 = 전량) |
+| `crawl_naver.py` | `--per-query` | (네이버 검색 오픈 API) | `data/crawl_naver.csv`, `crawl_naver_yield.csv`(축별 유효율), `crawl_naver_manifest.json` | `NAVER_CLIENT_ID/SECRET` 환경변수 부재 |
+| `crawl_smartthings.py` | `--max` | crawl_playstore.run() 재사용 | `data/crawl_playstore_smartthings.csv` + `_manifest.json` | — |
+| `compare_competitor.py` | — | crawl_playstore_thinq.csv + _smartthings.csv | `out/compare_rating_trend.png`, `compare_summary.csv` | 두 crawl CSV 부재 |
 
 `--demo` 공통 의미: 합성 데이터 사용을 **명시적으로** 허용. 산출물에 synthetic 표기가 남는다(계보·컬럼·워터마크).
 

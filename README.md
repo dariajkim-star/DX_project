@@ -4,8 +4,11 @@
 그 산출물을 근거로 GPT 서브 에이전트(A~F)와 Claude Code(G)가 CX 보고서를 만드는(MoA)
 프로젝트입니다.
 
-> **상태**: 템플릿 하드닝 완료(v2.8, GPT 7차 교차검증). 실제 프로젝트(팀·주제·앱)는
-> 아직 미확정 — `SERVICE`, `APP_ID`, `FEATURE_COLUMNS`가 채워지면 실행 단계로 넘어갑니다.
+> **상태 (2026-07-21)**: 주제 확정 — **"집이 나를 따라온다 (Home Follows You)"**
+> (ThinQ VOC 실증 Pain → 캐리어 중립 온바디 홈 프로필). 본수집 **74,434건** 완료
+> (ThinQ 17,446 전량 + SmartThings 24,805 대조군 + 네이버 4축 매트릭스 32,183).
+> `SERVICE`·`APP_ID` 확정, `FEATURE_COLUMNS`만 설문 설계 대기.
+> 현재 확정 내용: [docs/CX_DEFINITION.md](docs/CX_DEFINITION.md) · 결정 이력: [docs/DECISIONS.md](docs/DECISIONS.md)
 
 ## 폴더 구조
 
@@ -15,11 +18,20 @@ DX_project/
 ├─ CLAUDE.md                  ← Master Agent(G) 규칙 (v2.7)
 ├─ moa_orchestrator.py        ← GPT A~F 호출 + 계보 게이트 (v2.8)
 ├─ docs/
+│  ├─ CX_DEFINITION.md        ← 주제·Pain Point·페르소나 확정본 (현재 상태)
+│  ├─ DECISIONS.md            ← 의사결정 인덱스 + 운영 원칙
+│  ├─ meetings/               ← 미팅 기록 (결정의 "왜")
+│  ├─ WORKFLOW.md             ← Mermaid 워크플로우 다이어그램 3종
 │  ├─ API_SPEC.md             ← 스크립트·파일 계약 명세
 │  └─ DEV_PLAN.md             ← 개발계획서 (이력 + 로드맵)
 ├─ dx_pipeline/               ← 원본 템플릿 (v2.1, 참고용 보존)
 └─ dx_pipeline_v2.2/          ← 현행 파이프라인 (v2.8)
    ├─ 01_collect.py ~ 06_visualize.py
+   ├─ 07_wordcloud_sentiment.py  ← 워드클라우드 + 감성 리포트
+   ├─ crawl_playstore.py      ← 본수집: 플레이스토어 전량 (토큰 페이지네이션)
+   ├─ crawl_naver.py          ← 본수집: 네이버 4축 키워드 매트릭스 + 유효율 측정
+   ├─ crawl_smartthings.py    ← 본수집: 경쟁 대조군 (crawl_playstore 재사용)
+   ├─ compare_competitor.py   ← ThinQ vs SmartThings 기간 정합 비교
    ├─ lineage.py              ← 계보 해시 공통 유틸
    ├─ requirements.txt
    ├─ data/                   ← 생성물 (git 미추적)
