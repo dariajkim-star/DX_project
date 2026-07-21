@@ -8,3 +8,5 @@ out/
 
 # MoA 실행 이력 (GPT 응답 원문 포함)
 out_moa/
+dx_pipeline_v2.2/data/
+dx_pipeline_v2.2/out/
