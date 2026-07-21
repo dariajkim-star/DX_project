@@ -29,6 +29,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+plt.rcParams["font.family"] = ["Malgun Gothic", "AppleGothic", "NanumGothic", "DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
+
 from model_config import LABEL_MAP, SENTIMENT_MODEL
 
 BASE = Path(__file__).parent
@@ -146,7 +149,6 @@ def run_sentiment(df: pd.DataFrame) -> pd.DataFrame:
 
 def plot_sentiment(df: pd.DataFrame, path: Path):
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
-    plt.rcParams["font.family"] = "Malgun Gothic"
     df["sentiment"].value_counts().plot.bar(ax=axes[0], color=["#c0392b", "#27ae60"])
     axes[0].set_title(f"감성 분포 (method={df['sentiment_method'].iloc[0]})")
     axes[0].tick_params(rotation=0)
