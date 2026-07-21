@@ -33,9 +33,10 @@ def file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def crawl(app_id: str, max_reviews: int) -> pd.DataFrame:
+def crawl(app_id: str, max_reviews: int, alias: str = "tmp") -> pd.DataFrame:
     from google_play_scraper import Sort, reviews
 
+    ckpt = DATA_DIR / f"crawl_playstore_{alias}_checkpoint.csv"
     all_rows, token = [], None
     while len(all_rows) < max_reviews:
         count = min(BATCH, max_reviews - len(all_rows))
@@ -47,8 +48,13 @@ def crawl(app_id: str, max_reviews: int) -> pd.DataFrame:
         all_rows.extend(result)
         if len(all_rows) % 2000 < BATCH:
             print(f"  … {len(all_rows)}건 (최고 {all_rows[-1]['at']:%Y-%m-%d}까지 도달)")
+            # 체크포인트 — 대량 수집 중 레이트리밋/네트워크 끊김 대비
+            pd.DataFrame(all_rows)[["content", "score", "at", "thumbsUpCount"]] \
+                .to_csv(ckpt, index=False, encoding="utf-8-sig")
         if token is None:  # 더 이상 페이지 없음 = 전량 도달
             break
+    if ckpt.exists():
+        ckpt.unlink()  # 정상 완료 시 체크포인트 제거
 
     df = pd.DataFrame(all_rows)[["content", "score", "at", "thumbsUpCount"]]
     df.columns = ["review", "rating", "date", "likes"]
@@ -59,7 +65,7 @@ def crawl(app_id: str, max_reviews: int) -> pd.DataFrame:
 def run(app_id: str, alias: str, max_reviews: int) -> Path:
     """수집→저장→manifest 기록. crawl_smartthings.py도 이 함수를 재사용한다."""
     print(f"[수집 시작] {app_id} (상한 {max_reviews}건)")
-    df = crawl(app_id, max_reviews)
+    df = crawl(app_id, max_reviews, alias)
 
     out_csv = DATA_DIR / f"crawl_playstore_{alias}.csv"
     df.to_csv(out_csv, index=False, encoding="utf-8-sig")
