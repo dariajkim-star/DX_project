@@ -128,8 +128,13 @@ P-2 측정: 소실·재작업 명시 표현 정규식([compare_competitor.py](..
 - 토픽: BERTopic + Ko-SBERT `jhgan/ko-sroberta-multitask` — `model_config.py`에 고정
 
 ## 5. 다음 단계
-1. POV → HMW 문장 도출 (P1 × Pain Point)
-2. bmad story 작성 (주제 → 구현 단위)
-3. 설문 설계(P1 검증 문항 + FEATURE_COLUMNS 동기화)
-4. MoA 실행(A~F) → CX 보고서 초안
-5. 가민 BLE 데모 (스트레치)
+1. ~~POV → HMW 문장 도출 (P1 × Pain Point)~~ → **완료** [CX_분석결과.md](final-output/CX_분석결과.md) §4
+2. ~~bmad story 작성 (주제 → 구현 단위)~~ → **완료** [epics.md](planning-artifacts/epics.md) (4에픽 13스토리)
+3. 설문 설계(P1 검증 문항 + FEATURE_COLUMNS 동기화) → 설계 완료([SURVEY_PLAN.md](SURVEY_PLAN.md) v3),
+   **배포 대기 = 현재 크리티컬 패스**
+4. ~~MoA 실행(A~F) → CX 보고서 초안~~ → **완료** (run `20260721_194518_937742`, G 검수 반영)
+5. 가민 BLE 데모 (스트레치) → epics.md **Epic 2**로 구체화됨
+
+**페르소나 상태 갱신**: MoA의 E 에이전트가 생성한 인구통계 페르소나 2건(김민수·김영희)은
+날조로 기각됨. §3의 Night Keeper(잡 기반, 인구통계 미확인)가 유효한 유일한 페르소나이며,
+🔴 칸은 여전히 설문이 채운다.
