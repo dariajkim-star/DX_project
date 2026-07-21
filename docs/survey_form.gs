@@ -236,9 +236,9 @@ function applyV2() {
   ]);
   Logger.log('13 교체 완료 (금액 → 성향)');
 
-  // 13-2 신설: 13 바로 뒤
+  // 13-2 신설: 13-1 뒤 (13 → 13-1 → 13-2)
   const idx132 = form.getItems().filter(function (it) {
-    return it.getTitle().indexOf('13.') === 0;
+    return it.getTitle().indexOf('13-1.') === 0;
   })[0].getIndex() + 1;
   const new132 = form.addMultipleChoiceItem()
     .setTitle('13-2. 돈을 낸다면 어떤 방식이 가장 자연스러울까요?')
