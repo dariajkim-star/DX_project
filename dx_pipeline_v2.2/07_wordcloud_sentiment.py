@@ -39,7 +39,9 @@ DATA_DIR = BASE / "data"
 OUT_DIR = BASE / "out"
 OUT_DIR.mkdir(exist_ok=True)
 
-FONT_PATH = r"C:\Windows\Fonts\malgun.ttf"  # 한글 폰트 (Windows 기본)
+# 워드클라우드용 한글 폰트 — malgun.ttf는 wordcloud의 글리프 높이 계산이 어긋나
+# 캔버스 가장자리 단어가 잘리는 문제가 있어 나눔고딕 사용
+FONT_PATH = r"C:\Windows\Fonts\NanumGothic.ttf"
 
 # 05와 동일 계열의 도메인 불용어 + 워드클라우드 전용 (조사·범용어는 Kiwi 품사로 걸러짐)
 STOPWORDS = {
@@ -101,6 +103,13 @@ def crawl_naver_keyword(keyword: str, per_source: int = 100) -> pd.DataFrame:
         print(f"[OK] 네이버 {api}: {got}건")
     df = pd.DataFrame(rows)
     if not df.empty:
+        # 키워드 오염 필터 — 'ThinQ' 검색에 걸리는 옛 스마트폰(G6~G8, V40 등) 글 제거
+        phone_noise = df["review"].str.contains(
+            r"G[5-9]\s*ThinQ|V[345]0\s*ThinQ|스냅드래곤|스마트폰.{0,10}(사양|스펙|출시)",
+            regex=True, na=False)
+        if phone_noise.any():
+            print(f"[OK] 키워드 오염 필터: 스마트폰 ThinQ 관련 {phone_noise.sum()}건 제거")
+            df = df[~phone_noise].reset_index(drop=True)
         df.to_csv(DATA_DIR / "keyword_lge.csv", index=False, encoding="utf-8-sig")
         print(f"저장: data/keyword_lge.csv ({len(df)}건) — 키워드='{keyword}'")
     return df
@@ -120,10 +129,22 @@ def tokenize(texts: list[str]) -> Counter:
 
 
 def draw_wordcloud(freq: Counter, path: Path, top: int):
+    import random as _random
+
     from wordcloud import WordCloud
+
+    def _red_palette(word, **kw):
+        # colormap='Reds' 하위 톤이 배경에 묻혀서 진한 적색 계열만 사용
+        palette = ["#7f1d1d", "#b91c1c", "#dc2626", "#ef4444", "#c2410c", "#9a3412"]
+        return palette[int(_random.Random(word).uniform(0, 1) * len(palette))]
+
+    # max_font_size 제한 + margin — 최상위 단어가 캔버스 밖으로 잘리는 문제 방지
+    # prefer_horizontal=1.0 — 세로 단어 제거 (한글 가독성)
     wc = WordCloud(font_path=FONT_PATH, width=1200, height=700,
                    background_color="white", max_words=top,
-                   colormap="Reds").generate_from_frequencies(dict(freq.most_common(top)))
+                   max_font_size=180, margin=10, prefer_horizontal=1.0,
+                   random_state=42,
+                   color_func=_red_palette).generate_from_frequencies(dict(freq.most_common(top)))
     wc.to_file(str(path))
     print(f"[OK] 워드클라우드 저장: {path}")
 
