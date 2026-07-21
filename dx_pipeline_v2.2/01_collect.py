@@ -25,7 +25,7 @@ DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 APP_ID = "com.lgeha.nuts"  # LG ThinQ 앱. 플레이스토어 URL의 id= 값으로 교체
-N_REVIEWS = 5000
+N_REVIEWS = 20000  # 전량 수집 (한국어 리뷰 총량 ~17.4k — crawl로 확인)
 
 
 def collect_from_playstore() -> pd.DataFrame:
