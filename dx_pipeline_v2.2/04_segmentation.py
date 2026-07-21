@@ -7,15 +7,21 @@
   (숫자형 자동 인식 폐지 — 응답자 ID·코드값이 군집 변수로 섞이는 사고 방지)
 - v2.2: RF 변수중요도 → 세그먼트별 표준화 평균(z-score 프로파일)으로 교체
   (군집 라벨을 만든 데이터로 다시 중요도를 재는 순환 논리 제거)
+- v2.9: 계보 산출물 추가 — seg_manifest.json(입력 해시·k·실루엣)과
+  seg_members.csv(세그먼트 라벨 + 자유응답 원문). ThinQ Village(synthetic_panel.py)가
+  "이 프로파일이 실설문에서 나왔음"을 해시로 증명하고 세그먼트별 실응답을 인용하기 위한 전제.
+  (데이터출처 컬럼은 문자열이라 손으로 고칠 수 있다 — 해시가 있어야 게이트가 성립한다)
 실행: python 04_segmentation.py          (data/survey.csv 필요)
       python 04_segmentation.py --demo   (합성 샘플 300건 — 데모 전용)
-출력: out/seg_elbow.png, out/seg_pca.png, out/seg_profile.csv, out/seg_zprofile.csv
+출력: out/seg_elbow.png, out/seg_pca.png, out/seg_profile.csv, out/seg_zprofile.csv,
+      out/seg_members.csv, out/seg_manifest.json
 """
 import sys
 _enc = getattr(sys.stdout, "encoding", None)
 if _enc and _enc.lower() != "utf-8" and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")  # Windows cp949 콘솔 대응
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -41,6 +47,7 @@ plt.rcParams["axes.unicode_minus"] = False
 # v3: SURVEY_PLAN §3 확정 목록. 정의와 인코딩은 survey_encode.py 한 곳에만 둔다
 # (두 벌로 나뉘면 "몇 점으로 봤는지"가 조용히 어긋난다).
 from survey_encode import FEATURE_COLUMNS  # noqa: E402
+from lineage import file_sha256, save_json  # noqa: E402
 
 MIN_SAMPLES = 10  # 이 미만이면 군집 결과가 통계적으로 무의미
 
@@ -125,9 +132,10 @@ def find_best_k(X, k_max=7):
     fig.tight_layout(); fig.savefig(OUT_DIR / "seg_elbow.png", dpi=150)
     plt.close(fig)
 
-    best_k = list(k_range)[int(np.argmax(silhouettes))]
-    print(f"[OK] 실루엣 기준 최적 k = {best_k} (점수 {max(silhouettes):.3f})")
-    return best_k
+    best_i = int(np.argmax(silhouettes))
+    best_k, best_score = list(k_range)[best_i], silhouettes[best_i]
+    print(f"[OK] 실루엣 기준 최적 k = {best_k} (점수 {best_score:.3f})")
+    return best_k, float(best_score)  # v2.9: 실루엣도 계보에 기록
 
 
 if __name__ == "__main__":
@@ -139,9 +147,11 @@ if __name__ == "__main__":
     survey_path = DATA_DIR / "survey.csv"
     if args.demo:
         df = make_sample_survey()
+        survey_hash = None  # 합성 데이터엔 계보가 없다 — 게이트가 이걸로 실모드를 거른다
         print(f"[DEMO] 합성 설문 사용: {df.shape} — 군집 결과는 파이프라인 검증용")
     elif survey_path.exists():
         df = pd.read_csv(survey_path)
+        survey_hash = file_sha256(survey_path)
         print(f"[OK] 실제 설문 로드: {df.shape}")
     else:
         raise FileNotFoundError(
@@ -166,7 +176,7 @@ if __name__ == "__main__":
     X = scaler.fit_transform(df[FEATURE_COLUMNS])
 
     # 3) 최적 k 탐색 → K-Means
-    k = find_best_k(X)
+    k, silhouette = find_best_k(X)
     km = KMeans(n_clusters=k, n_init=10, random_state=42).fit(X)
     df["segment"] = km.labels_
 
@@ -200,4 +210,32 @@ if __name__ == "__main__":
     print("\n[세그먼트 z-score 프로파일] (|값|이 클수록 그 세그먼트의 구별 특징)")
     print(z_profile)
 
-    print("\n저장 완료: out/seg_elbow.png, out/seg_pca.png, out/seg_profile.csv, out/seg_zprofile.csv")
+    # 7) v2.9: 세그먼트가 붙은 응답 원본 — 페르소나가 인용할 "그 세그먼트의 실제 말".
+    #    평균만으로는 사람이 안 나온다. 자유응답이 있어야 에이전트가 조련된다.
+    members = df.copy()
+    members.insert(0, "응답번호", members.index)
+    members.to_csv(OUT_DIR / "seg_members.csv", index=False, encoding="utf-8-sig")
+
+    # 8) v2.9: 계보 매니페스트 — 다음 단계(synthetic_panel.py)가 이 프로파일의
+    #    출처를 해시로 검증한다. 파일 안의 '데이터출처' 문자열만으로는
+    #    합성 데모를 survey로 고쳐 쓰는 것을 막을 수 없다.
+    save_json(OUT_DIR / "seg_manifest.json", {
+        "run_id": datetime.now().strftime("%Y%m%d_%H%M%S_%f"),
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "source_type": "synthetic_demo" if args.demo else "survey",
+        "survey_csv": None if args.demo else str(survey_path.name),
+        "survey_csv_hash": survey_hash,
+        "n_respondents": int(len(df)),
+        "n_imputed_cells": n_nan,
+        "k": int(k),
+        "silhouette": round(silhouette, 4),
+        "feature_columns": list(FEATURE_COLUMNS),
+        "segment_sizes": {str(s): int(c) for s, c
+                          in df["segment"].value_counts().sort_index().items()},
+        "seg_profile_hash": file_sha256(OUT_DIR / "seg_profile.csv"),
+        "seg_zprofile_hash": file_sha256(OUT_DIR / "seg_zprofile.csv"),
+        "seg_members_hash": file_sha256(OUT_DIR / "seg_members.csv"),
+    })
+
+    print("\n저장 완료: out/seg_elbow.png, out/seg_pca.png, out/seg_profile.csv, "
+          "out/seg_zprofile.csv, out/seg_members.csv, out/seg_manifest.json")

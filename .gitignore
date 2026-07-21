@@ -10,3 +10,6 @@ out/
 out_moa/
 dx_pipeline_v2.2/data/
 dx_pipeline_v2.2/out/
+
+# ThinQ Village 실행 이력 (LLM 응답 원문 포함)
+out_panel/

@@ -150,4 +150,10 @@ v3 인코딩 주의:
 ## 6. 남은 일
 - [ ] 파일럿 3명 (신혼 친구 중) → 문구 수정 → 구글폼 배포
 - [ ] 응답 수집 → `data/survey.csv` → `04_segmentation.py` 실행
-- [ ] ThinQ Village 구현 (`synthetic_panel.py` — OPENAI_API_KEY 필요)
+- [x] ThinQ Village 골격 구현 (`synthetic_panel.py` v1.0, 2026-07-21) — 계보 게이트
+      (synthetic_demo 거부·survey.csv 해시 검증·painpoints 계보 검증), 홀드아웃 재현
+      테스트(문12·문13 제외 조련 → 1-TVD, 셀당 `--n-trials` 기본 3회 mean±sd — 단일
+      표본 금지), 가격 what-if(워터마크+실측 아님 병기), `--dry-run` 오프라인 검증.
+      04_segmentation v2.9가 seg_manifest.json·seg_members.csv를 추가로 산출.
+- [ ] ThinQ Village 실행 — 실설문 survey.csv → 04 → `python synthetic_panel.py`
+      (OPENAI_API_KEY 필요. 실행 전 `--dry-run`으로 프롬프트 검수)

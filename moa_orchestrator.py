@@ -66,6 +66,8 @@ NO_DATA_NOTE = (
 
 
 # ---------- 계보 게이트 (v2.6) ----------
+# dx_pipeline_v2.2/lineage.py의 file_sha256과 동일 — 의도적 중복.
+# 루트 스크립트가 하위 파이프라인 폴더를 import하는 결합을 피한다.
 def _file_sha256(path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
