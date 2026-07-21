@@ -54,5 +54,6 @@
 - [ ] **파일럿 응답 4건 삭제** (v2 문항 기준이라 v3 데이터와 혼재 불가 — 백업 완료)
 - [ ] 파일럿 재수집 (신혼 친구 3명) → 문구·소요시간 점검
 - [ ] 동탄 맘카페 매니저 사전 허락 문의 (Vex 3원칙: LG 공식 아님·익명·수집항목 고지 — 폼 설명에 반영 완료)
-- [ ] 본배포 → 응답 시트 → `data/survey.csv` → `04_segmentation.py`
-- [ ] `04_segmentation.py`의 `지불의사` 인코딩을 `0/1/2`로 갱신 (v3 변경 반영)
+- [ ] 본배포 → 응답 시트 CSV 내려받기 → `data/survey_raw.csv`로 저장
+- [ ] `python survey_encode.py` → `data/survey.csv` → `python 04_segmentation.py`
+- [x] `FEATURE_COLUMNS` v3 반영 완료 (`survey_encode.py` 신설, `지불의사` 0/1/2)

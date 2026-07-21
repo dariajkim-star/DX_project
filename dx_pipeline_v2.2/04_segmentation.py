@@ -37,31 +37,61 @@ plt.rcParams["font.family"] = ["Malgun Gothic", "AppleGothic", "NanumGothic", "D
 plt.rcParams["axes.unicode_minus"] = False
 
 # v2.2: 군집에 사용할 변수를 명시적으로 지정 — 설문의 ID/코드/타임스탬프가
-# "숫자형"이라는 이유로 자동 포함되는 것을 차단. 설문 문항에 맞게 수정할 것.
-FEATURE_COLUMNS = [
-    "나이",
-    "보유가전수",
-    "앱사용빈도_주",
-    "알림놓침빈도_주",
-    "불편심각도_5점",
-]
+# "숫자형"이라는 이유로 자동 포함되는 것을 차단.
+# v3: SURVEY_PLAN §3 확정 목록. 정의와 인코딩은 survey_encode.py 한 곳에만 둔다
+# (두 벌로 나뉘면 "몇 점으로 봤는지"가 조용히 어긋난다).
+from survey_encode import FEATURE_COLUMNS  # noqa: E402
 
 MIN_SAMPLES = 10  # 이 미만이면 군집 결과가 통계적으로 무의미
 
 
 def make_sample_survey(n=300, seed=42) -> pd.DataFrame:
     """[데모 전용] 세 그룹을 의도적으로 심어둔 합성 설문 —
-    이 데이터의 군집 결과는 '심어둔 그룹의 복원'이지 고객 발견이 아님."""
+    이 데이터의 군집 결과는 '심어둔 그룹의 복원'이지 고객 발견이 아님.
+
+    v3: 모집 설계(SURVEY_PLAN §1)의 G1/G2/G3를 흉내 낸다.
+      g0 = Night Keeper 후보(유자녀·야간사용↑·Pain↑)
+      g1 = 떠날 사람 후보(전월세·이사계획·혼수 구매)
+      g2 = 대조군(Pain↓·수용도↓)
+    """
     rng = np.random.default_rng(seed)
     g = rng.choice([0, 1, 2], size=n, p=[0.4, 0.35, 0.25])
+
+    def pick(a, b, c):
+        return np.where(g == 0, a, np.where(g == 1, b, c))
+
+    def scale(mu_a, mu_b, mu_c, sd=0.8):
+        return pick(rng.normal(mu_a, sd, n), rng.normal(mu_b, sd, n),
+                    rng.normal(mu_c, sd, n)).clip(1, 5).round()
+
     df = pd.DataFrame({
-        "나이": np.where(g == 0, rng.normal(32, 5, n), np.where(g == 1, rng.normal(58, 6, n), rng.normal(41, 7, n))).round(),
-        "보유가전수": np.where(g == 0, rng.normal(6, 1.5, n), np.where(g == 1, rng.normal(3, 1, n), rng.normal(8, 2, n))).clip(1).round(),
-        "앱사용빈도_주": np.where(g == 0, rng.normal(10, 3, n), np.where(g == 1, rng.normal(2, 1, n), rng.normal(15, 4, n))).clip(0).round(),
-        "알림놓침빈도_주": np.where(g == 0, rng.normal(3, 1, n), np.where(g == 1, rng.normal(6, 2, n), rng.normal(1, 0.5, n))).clip(0).round(),
-        "불편심각도_5점": np.where(g == 0, rng.normal(3.5, 0.6, n), np.where(g == 1, rng.normal(4.4, 0.4, n), rng.normal(2.2, 0.6, n))).clip(1, 5).round(1),
+        "LG가전수": pick(rng.normal(2.6, 0.5, n), rng.normal(1.8, 0.6, n),
+                       rng.normal(1.5, 0.6, n)).clip(1, 3).round(),
+        "앱사용빈도": pick(rng.normal(3.4, 0.6, n), rng.normal(2.2, 0.8, n),
+                       rng.normal(1.6, 0.8, n)).clip(0, 4).round(),
+        "연령대": pick(rng.normal(2.4, 0.6, n), rng.normal(2.0, 0.5, n),
+                     rng.normal(3.0, 1.0, n)).clip(1, 5).round(),
+        "자녀유무": pick(rng.random(n) < 0.85, rng.random(n) < 0.15,
+                      rng.random(n) < 0.30).astype(int),
+        "점유형태_전월세": pick(rng.random(n) < 0.35, rng.random(n) < 0.90,
+                           rng.random(n) < 0.40).astype(float),
+        "이사계획": pick(rng.choice([0, 0.5, 1], n, p=[.6, .25, .15]),
+                      rng.choice([0, 0.5, 1], n, p=[.1, .2, .7]),
+                      rng.choice([0, 0.5, 1], n, p=[.5, .3, .2])),
+        "구매계기_혼수": pick(rng.random(n) < 0.30, rng.random(n) < 0.70,
+                          rng.random(n) < 0.20).astype(int),
+        "P1경험": scale(4.2, 3.0, 2.0),
+        "P2경험": scale(4.0, 3.4, 1.9),
+        "P3부담": scale(3.6, 3.0, 2.2),
+        "워치보유": pick(rng.random(n) < 0.55, rng.random(n) < 0.45,
+                      rng.random(n) < 0.35).astype(int),
+        "야간사용": scale(4.4, 2.6, 1.8),
+        "온바디수용도": scale(4.3, 3.6, 2.1),
+        "지불의사": pick(rng.choice([0, 1, 2], n, p=[.2, .4, .4]),
+                      rng.choice([0, 1, 2], n, p=[.3, .5, .2]),
+                      rng.choice([0, 1, 2], n, p=[.7, .25, .05])),
     })
-    return df
+    return df[FEATURE_COLUMNS]
 
 
 def find_best_k(X, k_max=7):

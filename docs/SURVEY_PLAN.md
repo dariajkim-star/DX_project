@@ -82,7 +82,11 @@
 삭제 이력(v1→v2): 성별(가설 무), 주거 형태(점유형태와 신호 중복·가설 열위), 지역(§0 참조).
 가구형태+자녀유무는 문4로 병합.
 
-## 3. FEATURE_COLUMNS (확정 후보 — 인코딩 포함)
+## 3. FEATURE_COLUMNS (확정 — 인코딩 포함)
+
+> 구현: `dx_pipeline_v2.2/survey_encode.py`가 **단일 출처**다. 목록과 매핑 표를 여기에 두고
+> `04_segmentation.py`는 import만 한다 (두 벌로 나뉘면 "몇 점으로 봤는지"가 조용히 어긋난다).
+> 파이프라인: 구글폼 CSV → `survey_encode.py` → `data/survey.csv` → `04_segmentation.py`
 
 ```python
 FEATURE_COLUMNS = [
