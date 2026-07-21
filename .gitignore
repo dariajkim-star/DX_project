@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+
+# 파이프라인 생성물 — `python 01_collect.py --demo` 이후 재생성 가능.
+# data/는 실행마다 run_id·해시가 바뀌므로 추적하지 않는다.
+data/
+out/
+
+# MoA 실행 이력 (GPT 응답 원문 포함)
+out_moa/

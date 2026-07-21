@@ -1,0 +1,23 @@
+# DX 파이프라인 필수 라이브러리
+# 설치: pip install -r requirements.txt
+pandas
+numpy
+scikit-learn
+matplotlib
+
+# 1단계: 데이터 수집
+google-play-scraper
+
+# 2단계: 한국어 형태소 분석 (Java 불필요, pip만으로 설치됨)
+kiwipiepy
+
+# 3단계: 딥러닝 임베딩 (Ko-SBERT)
+sentence-transformers
+
+# 5단계: 감성 분석 + 토픽 모델링
+transformers
+torch
+bertopic
+
+# 시각화 한글 폰트 (선택)
+# 윈도우는 'Malgun Gothic', 맥은 'AppleGothic' 자동 사용
