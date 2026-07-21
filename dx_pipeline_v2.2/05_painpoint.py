@@ -111,7 +111,13 @@ def load_valid_embeddings(df: pd.DataFrame):
 def topics_bertopic(neg: pd.DataFrame, all_emb):
     from bertopic import BERTopic
     embeddings = all_emb[neg.index.values] if all_emb is not None else None
-    tm = BERTopic(language="multilingual", min_topic_size=5, verbose=False)
+    # 대형 코퍼스에서 min_topic_size만 키우면 HDBSCAN이 90%짜리 거대 클러스터로
+    # 뭉치는 것을 스윕으로 확인(2026-07-21: ms=10/15/20 모두 토픽 2개, 최대 점유 90%).
+    # 대신 잘게 쪼갠 뒤(ms=5) 계층 병합(nr_topics)으로 상한을 두는 전략 채택 —
+    # 3천건 기준 nr=16이 토픽 15개·최대 점유 25%·노이즈 33%로 최량이었음.
+    nr = 16 if len(neg) > 1000 else None
+    tm = BERTopic(language="multilingual", min_topic_size=5, nr_topics=nr, verbose=False)
+    print(f"[OK] min_topic_size=5, nr_topics={nr} (부정 리뷰 {len(neg)}건 기준)")
     topics, _ = tm.fit_transform(neg["review"].tolist(), embeddings)
     neg["topic"] = topics
     info = tm.get_topic_info()

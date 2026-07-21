@@ -28,7 +28,7 @@ MODEL = "gpt-4o-mini"      # 품질 우선이면 "gpt-4o"
 MAX_TOKENS = 1500          # 응답 상한 (비용 통제)
 MAX_RETRY = 3
 MAX_CSV_ROWS = 20          # B 프롬프트에 넣을 painpoints.csv 상위 행 수
-SERVICE = "LG 스마트홈 접근성 서비스 (청각장애인 대상 홈 알림 웨어러블)"  # 팀 서비스로 교체
+SERVICE = "LG ThinQ (LG 스마트홈 IoT 통합 앱, com.lgeha.nuts)"  # APP_ID와 정합
 
 # v2.6: import 부작용 제거 — client·RUN_DIR은 main()에서 초기화
 client = None
