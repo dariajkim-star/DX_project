@@ -33,32 +33,23 @@ from .schema import (
     validate_profile,
 )
 
-# ---------- 예산 참조값 (결정 ③ C: 구간 표기) ----------
-# v2까지는 BUDGET_STORAGE_KEY(8,192) × MARGIN(0.8) = 6,553B 하나로 판정했다.
-# 2차 리뷰(Grumbal F4)에서 드러난 문제: MARGIN은 안전 마진이 아니라 **판정
-# 결정 변수**였다(0.5면 TYPICAL이 뒤집힘). 근거 문서 없는 상수를 곱한 값을
-# 0.1% 단위로 보고하는 것은 정밀도 착시다.
-#
-# 그래서 단일 판정을 버리고 **구간으로 보고**한다 — 어느 예산을 쓸지는
-# 실기기 실측(결정 ②)으로 확정될 때까지 열어둔다.
-#
-#  · 보수(4,096B)  — 포럼 수치의 절반. 펌웨어 편차·타 CIQ 앱 공유를 감안한 하한
-#  · 포럼(8,192B)  — 6년 전 포럼 글. 후속 스레드에서 이 값은 실제로는
-#                    Application.Properties의 한계로 구분됨 (PROFILE_SCHEMA §5.3)
-#  · 공식(32,768B) — Application.Storage 공식 문서 "values are limited to 32 KB".
-#                    단 총량은 "기기별로 다름"이고 setValue System Error 버그 존재
-BUDGET_REFERENCES = (
-    ("보수", 4 * 1024),
-    ("포럼", 8 * 1024),
-    ("공식", 32 * 1024),
-)
+# ---------- 예산 기준 (결정 #1: 보수 단일값) ----------
+# 파티 결정(2026-07-22): 예산 상수를 실기기 실측 전까지 **보수값 하나**로 고정한다.
+# 4,096B = 포럼 8KB의 절반. 근거는 "포럼 8KB도 못 믿으니 그 절반을 하한으로" —
+# 이 값 자체가 이미 마진이라 별도 MARGIN을 곱하지 않는다(그게 아까 없앤 병).
+# 실기기 실측(결정 #2 실행계획, PROFILE_SCHEMA §5.4)이 오면 이 값을 교체한다.
+BUDGET_PER_KEY = 4 * 1024           # 보수: Storage 키 1개당 상한
 BUDGET_STORAGE_TOTAL = 128 * 1024   # Application.Storage 총량 (포럼발, 미확정)
 BLE_MTU = 20                        # BLE 특성 read/write 상한, long write 미지원
 
-# 저장 전략(결정 ⑤ A): **섹션 분할** — meta/devices/settings/routines를
-# 각각 별도 Storage 키에 넣는다. 판정은 '전체가 한 키에 들어가는가'(single)와
-# '가장 큰 섹션이 한 키에 들어가는가'(split) 둘 다 보고한다.
-SECTION_KEYS = ("devices", "settings", "routines")
+# 저장 전략(파티 결정: 기기 단위 분할). 프로필을 다음 키들로 쪼갠다:
+#   meta                 — schema_version, reserved_wellness, 기기/루틴 인덱스
+#   device:<ref>         — 기기 1대 + 그 설정 (기기당 키 1개)
+#   routine:<i>          — 루틴 1개 (루틴당 키 1개)
+# 이렇게 하면 **최악 케이스에서도 조각 하나가 보수 예산에 들어간다**
+# (실측: 기기 1대 최악 1,772B / 루틴 1개 최악 2,328B < 4,096B).
+# 섹션 통째(routines 46KB)로는 안 들어가던 것을 조각으로 나눠 해결.
+CHUNK_KINDS = ("meta", "device", "routine")
 
 # 와이어 입력 하드 캡 (2차 리뷰 Vex F5). v1은 길이 검사가 전혀 없어
 # 기기 20만대·15.6MB 프로필이 deserialize를 통과했다 — 예산의 1,900배이자
@@ -234,6 +225,40 @@ def deserialize(data):
         return None, [f"역직렬화 내부 오류({type(e).__name__}: {e}) — 거부"]
 
 
+# ---------- 기기 단위 분할 (파티 결정) ----------
+def split_chunks(profile) -> dict:
+    """프로필을 저장 키 단위 조각으로 나눈다. 반환 {키이름: 파이썬 객체}.
+
+    이것은 '저장 표현'이지 '전송 표현'이 아니다 — BLE 청킹(20B)은 Epic 2가
+    이 조각들 위에 다시 얹는다. 여기서는 Storage 키 경계만 정한다.
+
+    device 조각은 기기 정의 + 그 기기의 settings를 함께 담는다(복원 시 한 조각이
+    한 기기를 완결). routines는 기기 참조를 넘나들므로 루틴 단위로 쪼갠다.
+    """
+    if not isinstance(profile, dict):
+        return {}
+    chunks = {"meta": {
+        "schema_version": profile.get("schema_version"),
+        "reserved_wellness": profile.get("reserved_wellness", {}),
+        "device_refs": [d.get("device_ref") for d in profile.get("devices", [])
+                        if isinstance(d, dict)],
+        "routine_count": len(profile.get("routines", []))
+        if isinstance(profile.get("routines"), list) else 0,
+    }}
+    settings = profile.get("settings") if isinstance(profile.get("settings"), dict) else {}
+    for d in profile.get("devices", []):
+        if not isinstance(d, dict):
+            continue
+        ref = d.get("device_ref")
+        chunk = dict(d)
+        if ref in settings:
+            chunk["_settings"] = settings[ref]
+        chunks[f"device:{ref}"] = chunk
+    for i, r in enumerate(profile.get("routines", [])):
+        chunks[f"routine:{i}"] = r
+    return chunks
+
+
 # ---------- 크기 리포트 ----------
 def _safe_len(obj):
     """직렬화 길이. 실패 시 **None**(측정 불가) — 0이 아니다.
@@ -252,26 +277,27 @@ def _safe_len(obj):
 def size_report(profile):
     """직렬화 크기 분석. 반환 **(report: dict, errors: list)**.
 
-    결정 ③ C(구간 표기): 단일 예산·단일 판정을 내지 않는다. 실기기 실측(결정 ②)
-    전까지 어느 값이 맞는지 모르므로 참조 예산 3종 각각에 대해 판정을 병기한다.
-    결정 ⑤ A(섹션 분할): 판정은 두 축이다 —
-      single = 프로필 전체가 Storage 키 하나에 들어가는가
-      split  = 가장 큰 섹션이 Storage 키 하나에 들어가는가
+    파티 결정(2026-07-22): 판정 기준은 **기기 단위 분할된 조각**이다.
+      per_key_ok = 모든 조각이 BUDGET_PER_KEY(보수 4,096B) 안에 들어가는가
+      largest_chunk = 가장 큰 조각과 그 이름 (초과 시 원인 지목)
+    전체 크기(total_bytes)도 참고로 낸다 — 총량 예산 대비 판정용.
 
-    검증 미통과 프로필에도 리포트가 나온다(예산 초과 원인 진단이 목적).
+    검증 미통과 프로필에도 리포트가 나온다(초과 원인 진단이 목적).
     측정 실패는 0이 아니라 None으로 전파하고 errors에 남긴다(fail-closed).
     """
     errors = []
     rep = {
         "total_bytes": None,
-        "sections": {k: None for k in SECTION_KEYS},
-        "max_section_bytes": None,
-        "max_section": None,
+        "chunk_bytes": {},          # {키이름: 바이트}
+        "largest_chunk": None,      # (키이름, 바이트)
+        "largest_chunk_bytes": None,
+        "budget_per_key": BUDGET_PER_KEY,
+        "per_key_ok": None,         # 모든 조각이 예산 내인가
+        "n_keys": None,
         "bytes_per_device": None,
         "bytes_per_routine": None,
-        "budget_verdicts": {},
+        "total_within_budget": None,
         "ble_chunks": None,
-        "top_contributors": [],
     }
     if not isinstance(profile, dict):
         errors.append(f"프로필이 객체가 아님({type(profile).__name__})")
@@ -282,47 +308,39 @@ def size_report(profile):
         if total is None:
             errors.append("전체 직렬화 실패 — 크기 측정 불가(직렬화 불가 값 포함)")
 
-        contributors = []
-        for section in SECTION_KEYS:
-            node = profile.get(section)
-            if node is None:
-                continue
-            n = _safe_len(node)
-            rep["sections"][section] = n
-            if n is None:
-                errors.append(f"{section} 직렬화 실패 — 섹션 크기 측정 불가")
-            # 기여 필드는 **서수**로 지목한다 — settings 키는 사용자 통제
-            # 문자열이라 경로에 넣으면 리포트가 PII를 흘린다(2차 리뷰 Vex F6).
-            items = enumerate(node) if isinstance(node, list) else (
-                enumerate(node.values()) if isinstance(node, dict) else ())
-            for i, item in items:
-                b = _safe_len(item)
-                if b is not None:
-                    contributors.append({"section": section, "index": i, "bytes": b})
+        chunks = split_chunks(profile)
+        rep["n_keys"] = len(chunks)
+        sizes = {}
+        for name, obj in chunks.items():
+            b = _safe_len(obj)
+            sizes[name] = b
+            if b is None:
+                errors.append(f"조각 {name!r} 직렬화 실패 — 크기 측정 불가")
+        rep["chunk_bytes"] = sizes
 
-        measured = {k: v for k, v in rep["sections"].items() if v is not None}
+        measured = {k: v for k, v in sizes.items() if v is not None}
         if measured:
-            rep["max_section"] = max(measured, key=measured.get)
-            rep["max_section_bytes"] = measured[rep["max_section"]]
+            name = max(measured, key=measured.get)
+            rep["largest_chunk"] = name
+            rep["largest_chunk_bytes"] = measured[name]
+            # 조각 하나라도 측정 실패면 per_key_ok는 단정하지 않는다(None).
+            if len(measured) == len(sizes):
+                rep["per_key_ok"] = all(v <= BUDGET_PER_KEY for v in measured.values())
 
-        devices = profile.get("devices")
-        if isinstance(devices, list) and devices and rep["sections"]["devices"]:
-            rep["bytes_per_device"] = rep["sections"]["devices"] / len(devices)
-        routines = profile.get("routines")
-        if isinstance(routines, list) and routines and rep["sections"]["routines"]:
-            rep["bytes_per_routine"] = rep["sections"]["routines"] / len(routines)
+        n_dev = len([d for d in profile.get("devices", [])
+                     if isinstance(d, dict)]) if isinstance(
+                        profile.get("devices"), list) else 0
+        dev_chunks = [v for k, v in measured.items() if k.startswith("device:")]
+        if n_dev and dev_chunks:
+            rep["bytes_per_device"] = sum(dev_chunks) / n_dev
+        rou_chunks = [v for k, v in measured.items() if k.startswith("routine:")]
+        if rou_chunks:
+            rep["bytes_per_routine"] = sum(rou_chunks) / len(rou_chunks)
 
-        mx = rep["max_section_bytes"]
-        for label, budget in BUDGET_REFERENCES:
-            rep["budget_verdicts"][label] = {
-                "budget_bytes": budget,
-                "single": (total <= budget) if total is not None else None,
-                "split": (mx <= budget) if mx is not None else None,
-            }
-        if total is not None and BLE_MTU > 0:
-            rep["ble_chunks"] = math.ceil(total / BLE_MTU)
-        contributors.sort(key=lambda c: c["bytes"], reverse=True)
-        rep["top_contributors"] = contributors[:5]
+        if total is not None:
+            rep["total_within_budget"] = total <= BUDGET_STORAGE_TOTAL
+            if BLE_MTU > 0:
+                rep["ble_chunks"] = math.ceil(total / BLE_MTU)
     except Exception as e:   # fail-closed
         errors.append(f"리포트 내부 오류({type(e).__name__}: {e})")
     return rep, errors

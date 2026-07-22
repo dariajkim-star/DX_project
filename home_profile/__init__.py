@@ -12,12 +12,13 @@ SUPPORTED_VERSIONS(호출자가 읽을 정당한 이유가 있는 불변값) 추
 """
 from .storage import (
     BLE_MTU,
-    BUDGET_REFERENCES,
+    BUDGET_PER_KEY,
     BUDGET_STORAGE_TOTAL,
-    SECTION_KEYS,
+    CHUNK_KINDS,
     deserialize,
     serialize,
     size_report,
+    split_chunks,
 )
 from .schema import (
     SCHEMA_VERSION,
@@ -31,9 +32,9 @@ from .schema import (
 
 __all__ = [
     "BLE_MTU",
-    "BUDGET_REFERENCES",
+    "BUDGET_PER_KEY",
     "BUDGET_STORAGE_TOTAL",
-    "SECTION_KEYS",
+    "CHUNK_KINDS",
     "SCHEMA_VERSION",
     "SUPPORTED_VERSIONS",
     "TOP_LEVEL_KEYS",
@@ -43,5 +44,6 @@ __all__ = [
     "new_profile",
     "serialize",
     "size_report",
+    "split_chunks",
     "validate_profile",
 ]

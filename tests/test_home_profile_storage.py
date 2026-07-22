@@ -201,7 +201,7 @@ def test_deep_nesting_payload_rejected_without_crash():
     assert isinstance(errs, list) and errs
 
 
-# ---------- AC1·AC2: 크기 리포트 ----------
+# ---------- AC1·AC2: 크기 리포트 (기기 단위 분할, 파티 결정) ----------
 def test_size_report_total_matches_serialized_length(typical):
     blob, _ = st.serialize(typical)
     rep, errs = st.size_report(typical)
@@ -209,21 +209,75 @@ def test_size_report_total_matches_serialized_length(typical):
     assert rep["total_bytes"] == len(blob)
 
 
-def test_size_report_sections_do_not_exceed_total(small, typical, large):
+def test_chunks_cover_and_do_not_exceed_total(small, typical, large):
+    """조각들의 합은 전체와 대략 일치하고(중복 없음), 개별 조각은 전체 이하."""
     for p in (small, typical, large):
         rep, errs = st.size_report(p)
         assert errs == []
-        assert sum(rep["sections"].values()) <= rep["total_bytes"]
-        assert set(rep["sections"]) == {"devices", "settings", "routines"}
+        for name, b in rep["chunk_bytes"].items():
+            assert 0 < b <= rep["total_bytes"], name
+        # 조각 개수 = meta 1 + 기기 수 + 루틴 수
+        assert rep["n_keys"] == 1 + len(p["devices"]) + len(p["routines"])
+
+
+def test_split_chunks_structure(typical):
+    """기기 단위 분할: meta 1개 + 기기당 1개 + 루틴당 1개, device 조각은 설정 포함"""
+    chunks = st.split_chunks(typical)
+    assert "meta" in chunks
+    dev_keys = [k for k in chunks if k.startswith("device:")]
+    rou_keys = [k for k in chunks if k.startswith("routine:")]
+    assert len(dev_keys) == len(typical["devices"])
+    assert len(rou_keys) == len(typical["routines"])
+    # 첫 기기 조각은 그 기기의 설정을 함께 담는다(한 조각이 한 기기를 완결)
+    ref = typical["devices"][0]["device_ref"]
+    assert chunks[f"device:{ref}"]["_settings"] == typical["settings"][ref]
+
+
+def test_per_key_ok_true_at_conservative_budget(small, typical, large):
+    """보수 4,096B에서 데모/픽스처 규모는 모든 조각이 예산 내"""
+    for p in (small, typical, large):
+        rep, _ = st.size_report(p)
+        assert rep["per_key_ok"] is True
+        assert rep["largest_chunk_bytes"] <= st.BUDGET_PER_KEY
+
+
+def test_worst_case_ceiling_fits_per_key_budget():
+    """파티 결정의 핵심 주장: 보안 천장(기기30·루틴20)의 최악 케이스에서도
+    기기 단위 분할이면 조각 하나가 보수 예산에 들어간다."""
+    from home_profile import schema as sc
+    KL, VL = 32, sc._MAX_SETTING_STR
+    caps = [("c" * (KL - 3) + f"{j:03d}")[:KL]
+            for j in range(sc.MAX_CAPABILITIES_PER_DEVICE)]
+    p = new_profile()
+    for i in range(sc.MAX_DEVICES):
+        ref = ("d" * (KL - 3) + f"{i:03d}")[:KL]
+        p["devices"].append({"device_ref": ref, "device_type": ("t" * KL)[:KL],
+                             "capabilities": list(caps)})
+        p["settings"][ref] = {c: "v" * VL for c in caps[:sc.MAX_SETTINGS_PER_DEVICE]}
+    refs = [d["device_ref"] for d in p["devices"]]
+    for r in range(sc.MAX_ROUTINES):
+        p["routines"].append({
+            "trigger": {"type": ("y" * KL)[:KL],
+                        "params": {("p" * (KL - 2) + f"{j:02d}")[:KL]: "v" * VL
+                                   for j in range(sc.MAX_TRIGGER_PARAMS)}},
+            "actions": [{"device_ref": refs[(r + a) % len(refs)],
+                         "setting_key": caps[a % len(caps)], "value": "v" * VL}
+                        for a in range(sc.MAX_ACTIONS_PER_ROUTINE)]})
+    assert validate_profile(p) == []           # 최악 케이스도 유효
+    rep, errs = st.size_report(p)
+    assert errs == []
+    assert rep["per_key_ok"] is True, (
+        f"최악 조각 {rep['largest_chunk']} = {rep['largest_chunk_bytes']}B "
+        f"> {st.BUDGET_PER_KEY}B")
+    assert rep["total_within_budget"] is True  # 총량도 들어간다
 
 
 def test_size_report_per_unit_averages(typical):
     rep, _ = st.size_report(typical)
-    n_dev = len(typical["devices"])
-    assert rep["bytes_per_device"] == pytest.approx(
-        rep["sections"]["devices"] / n_dev, rel=1e-6)
-    assert rep["bytes_per_routine"] == pytest.approx(
-        rep["sections"]["routines"] / len(typical["routines"]), rel=1e-6)
+    dev = [v for k, v in rep["chunk_bytes"].items() if k.startswith("device:")]
+    rou = [v for k, v in rep["chunk_bytes"].items() if k.startswith("routine:")]
+    assert rep["bytes_per_device"] == pytest.approx(sum(dev) / len(dev), rel=1e-6)
+    assert rep["bytes_per_routine"] == pytest.approx(sum(rou) / len(rou), rel=1e-6)
 
 
 def test_size_report_zero_units_no_division_error():
@@ -232,53 +286,31 @@ def test_size_report_zero_units_no_division_error():
     assert rep["bytes_per_device"] is None
     assert rep["bytes_per_routine"] is None
     assert rep["total_bytes"] > 0
+    assert rep["n_keys"] == 1                   # meta만
 
 
-def test_top_contributors_are_real_paths(large):
-    rep, _ = st.size_report(large)
-    tops = rep["top_contributors"]
-    assert 1 <= len(tops) <= 5
-    prev = math.inf
-    for entry in tops:
-        assert entry["bytes"] <= prev            # 내림차순
-        prev = entry["bytes"]
-        # 2차 리뷰 Vex F6: 경로에 키 원문을 넣지 않는다 — 섹션+서수로 지목
-        node = large[entry["section"]]
-        seq = node if isinstance(node, list) else list(node.values())
-        assert 0 <= entry["index"] < len(seq)
-        assert len(st._dumps(seq[entry["index"]])) == entry["bytes"]
-
-
-def test_budget_verdicts_are_reported_as_a_range(typical):
-    """결정 ③ C: 단일 판정 금지 — 참조 예산 3종 각각에 single/split 병기"""
+def test_largest_chunk_is_the_max_measured(typical):
     rep, _ = st.size_report(typical)
-    assert set(rep["budget_verdicts"]) == {"보수", "포럼", "공식"}
-    for label, budget in st.BUDGET_REFERENCES:
-        v = rep["budget_verdicts"][label]
-        assert v["budget_bytes"] == budget
-        assert v["single"] is (rep["total_bytes"] <= budget)
-        assert v["split"] is (rep["max_section_bytes"] <= budget)
-    # 근거 없는 MARGIN 단일 판정은 제거됐다 (2차 리뷰 Grumbal F4)
-    assert not hasattr(st, "MARGIN")
-    assert "within_key_budget" not in rep and "pct_of_key_budget" not in rep
+    assert rep["largest_chunk"] in rep["chunk_bytes"]
+    assert rep["largest_chunk_bytes"] == max(rep["chunk_bytes"].values())
+    assert rep["largest_chunk_bytes"] <= rep["total_bytes"]
 
 
-def test_budget_verdict_flips_at_boundary(monkeypatch):
+def test_per_key_verdict_flips_at_boundary(monkeypatch):
     """경계를 실제로 넘겨 판정이 뒤집히는지 — 스텁 방지"""
     p = st.make_sample_profile(3, 2)
-    total = st.size_report(p)[0]["total_bytes"]
-    monkeypatch.setattr(st, "BUDGET_REFERENCES", (("t", total + 1),))
-    assert st.size_report(p)[0]["budget_verdicts"]["t"]["single"] is True
-    monkeypatch.setattr(st, "BUDGET_REFERENCES", (("t", total - 1),))
-    assert st.size_report(p)[0]["budget_verdicts"]["t"]["single"] is False
+    largest = st.size_report(p)[0]["largest_chunk_bytes"]
+    monkeypatch.setattr(st, "BUDGET_PER_KEY", largest + 1)
+    assert st.size_report(p)[0]["per_key_ok"] is True
+    monkeypatch.setattr(st, "BUDGET_PER_KEY", largest - 1)
+    assert st.size_report(p)[0]["per_key_ok"] is False
 
 
-def test_max_section_is_the_largest_measured(typical):
-    """결정 ⑤ A: 섹션 분할 판정의 기준은 가장 큰 섹션이다"""
-    rep, _ = st.size_report(typical)
-    assert rep["max_section"] in st.SECTION_KEYS
-    assert rep["max_section_bytes"] == max(rep["sections"].values())
-    assert rep["max_section_bytes"] <= rep["total_bytes"]
+def test_budget_is_conservative_single_value_no_margin():
+    """결정 #1: 보수 단일 기준. MARGIN·구간은 없다."""
+    assert st.BUDGET_PER_KEY == 4 * 1024
+    assert not hasattr(st, "MARGIN")
+    assert not hasattr(st, "BUDGET_REFERENCES")   # 구간은 단일값으로 좁혀졌다
 
 
 def test_ble_chunk_count(typical):
@@ -298,8 +330,7 @@ def test_size_report_never_raises_on_invalid():
     bad["devices"][0]["capabilities"] = {1, 2}
     rep, errs = st.size_report(bad)
     assert rep["total_bytes"] is None
-    for v in rep["budget_verdicts"].values():
-        assert v["single"] is None               # True가 아니다
+    assert rep["per_key_ok"] is None               # True가 아니다
     assert errs
 
 
@@ -322,7 +353,7 @@ def test_assumption_constants_are_named_as_assumptions():
 
 def test_package_exports_storage_api():
     import home_profile
-    for name in ("serialize", "deserialize", "size_report"):
+    for name in ("serialize", "deserialize", "size_report", "split_chunks"):
         assert name in home_profile.__all__
         assert hasattr(home_profile, name)
     # 샘플 생성기는 제품 표면이 아니다 (2차 리뷰 Yui F7)
