@@ -7,11 +7,11 @@
  *       → 섹션4(문11~15) → 제출 / 0대는 종료 섹션 → 제출
  */
 function createSurveyForm() {
-  const form = FormApp.create('스마트홈(ThinQ) 사용 경험 3분 설문');
+  const form = FormApp.create('스마트홈(ThinQ) 사용 경험 5분 설문');
 
   form.setDescription(
     '안녕하세요! LG 스마트가전(ThinQ) 사용 경험에 대한 짧은 설문입니다.\n\n' +
-    '⏱ 약 3분 소요 (13문항)\n' +
+    '⏱ 약 5분 소요 (필수 18문항)\n' +
     '🎁 응답자 중 추첨 5명께 기프티콘을 드립니다 (연락처는 추첨 희망자만 마지막에 선택 입력)\n\n' +
     '· 본 설문은 LG전자 공식 설문이 아니며, 개인 리서치 프로젝트입니다.\n' +
     '· 익명으로 진행되며, 응답은 통계 분석 목적으로만 사용 후 폐기됩니다.\n' +
@@ -41,10 +41,12 @@ function createSurveyForm() {
   form.addMultipleChoiceItem().setTitle('4. 가구 형태를 알려주세요')
     .setChoiceValues(['1인 가구', '부부 (자녀 없음)', '자녀 있음 (미취학)', '자녀 있음 (취학 이상)', '부모님댁에 거주', '기타']).setRequired(true);
 
-  // H2 소스 — 자가/전월세 이진을 오염시키지 않도록 '가족과 함께 거주'는 기타로 흡수
+  // H2 소스 — 자가/전월세 이진을 오염시키지 않도록 '가족과 함께 거주'는 기타로 흡수.
+  // v3.1: 기타에 자유기입을 켠다 — 인코딩은 어차피 NaN이지만, H2 표본을 얼마나·왜
+  //       잃는지 셀 수 있어야 배포 후 조기 진단이 가능하다 (Amelia).
   form.addMultipleChoiceItem().setTitle('5. 현재 주거 점유 형태는 무엇인가요?')
-    .setHelpText('가족 소유 집에 함께 사는 경우 등은 "기타"를 선택해주세요')
-    .setChoiceValues(['자가', '전세', '월세', '기타']).setRequired(true);
+    .setHelpText('가족 소유 집에 함께 사는 경우 등은 "기타"에 직접 적어주세요')
+    .setChoiceValues(['자가', '전세', '월세']).showOtherOption(true).setRequired(true);
 
   form.addMultipleChoiceItem().setTitle('6. 2년 내 이사 계획이 있으신가요?')
     .setChoiceValues(['있다', '없다', '아직 모르겠다']).setRequired(true);
@@ -63,33 +65,47 @@ function createSurveyForm() {
   form.addMultipleChoiceItem().setTitle('9. 앱 재설치나 공유기 교체 후, 가전을 다시 등록/설정한 경험이 있나요?')
     .setChoiceValues(L5_EXP).setRequired(true);
 
-  form.addMultipleChoiceItem().setTitle('10. 가전 앱의 회원가입·약관 동의·개인정보 요구가 부담스러웠던 적이 있나요?')
+  // v3.1: 질문(빈도) ↔ 척도(강도) 불일치 해소 — 문8·9는 빈도-빈도로 맞는데 문10만 어긋났다
+  form.addMultipleChoiceItem().setTitle('10. 가전 앱의 회원가입·약관 동의·개인정보 요구가 얼마나 부담스러우셨나요?')
     .setChoiceValues(['1 전혀 부담 없다', '2 부담 없다', '3 보통', '4 부담된다', '5 매우 부담된다']).setRequired(true);
 
   // ── 섹션 4: 워치·수용도·지불의사 (문11~15)
-  form.addPageBreakItem().setTitle('스마트워치와 새로운 방식');
+  // v3.1: 섹션 제목에서 '새로운'(홍보톤) 제거 — 조사 톤 일관성
+  form.addPageBreakItem().setTitle('손목 기기 사용 경험');
 
   // 복수 보유 가능 → 체크박스
   form.addCheckboxItem().setTitle('11-1. 스마트워치를 보유하고 계신가요? (여러 개면 모두 선택)')
     .setChoiceValues(['없음', '애플워치', '갤럭시워치', '가민', '기타']).setRequired(true);
 
   // 척도 유지(FEATURE_COLUMNS 야간사용) + 질문을 Night Keeper Job("확인")으로 교체
+  // v3.1: 육아 예시를 첫머리에서 뒤로 — Night Keeper는 잡 기반이지 유자녀가 아니다
+  //       (실측: 밤/새벽 7.6% vs 아기 1.7% — 야간 니즈의 대부분은 육아가 아니다)
   form.addMultipleChoiceItem().setTitle('11-2. 밤 10시 이후, 잠든 뒤나 자다 깨서 집 상태를 확인하거나 조절한 적이 얼마나 있나요?')
-    .setHelpText('예: 아이 방 온도 확인, 조명·에어컨 조절')
+    .setHelpText('예: 실내 온도 확인, 조명·에어컨 조절, 아이 방 상태 확인')
     .setChoiceValues(L5_EXP).setRequired(true);
 
   // 상황 복수 선택 — 기능 우선순위 인사이트용 (군집 변수 아님)
-  form.addCheckboxItem().setTitle('11-3. 앱으로 가전을 제어할 수 있다면 편할 것 같은 상황을 모두 골라주세요')
+  // v3.1: ①육아 보기 4→2로 축소, 비육아 야간 상황 2개 추가 — '야간'을 재야 하는데
+  //       '육아'를 재고 있었다 ②'특별히 없다' 추가 — 강제 선택이 낮 대조 항목을
+  //       오염시켜, 야간 편중이 실제인지 판별하려는 이 문항의 목적을 스스로 무너뜨렸다
+  form.addCheckboxItem().setTitle('11-3. 앱으로 가전을 확인·조절할 수 있다면 편할 것 같은 상황을 모두 골라주세요')
     .setChoiceValues([
+      '잠들기 전 침대에서 조명·에어컨 조절',
+      '자다 깨서 실내 온도·공기 확인',
+      '새벽 출근이나 야간 근무 전후로 집 상태 확인',
+      '밤중에 소음 걱정 없이 세탁기·건조기 예약',
       '아이 재우고 나서 불·가전 끄기',
       '자다 깨서 아이 방 온도·공기 확인',
-      '잠들기 전 침대에서 조명·에어컨 조절',
-      '밤중에 소음 걱정 없이 세탁기·건조기 예약',
-      '새벽에 일어나 집 상태 한 번 훑기',
       '낮에 외출 중 집 상태 확인',
+      '특별히 없다',
     ]).showOtherOption(true).setRequired(true);
 
-  form.addMultipleChoiceItem().setTitle('12. "앱을 열지 않아도, 손목의 워치에 담긴 내 설정으로 집이 알아서 반응한다"면 사용하시겠어요?')
+  // v3.1: "집이 알아서 반응한다"(광고 카피 톤) → "내 설정대로 맞춰진다".
+  //       톤이 튀는 곳이 곧 유도하는 곳이고, 문12는 ThinQ Village 홀드아웃 변수라
+  //       여기가 부풀면 재현율 측정까지 오염된다.
+  //       + 워치 미보유자가 '워치 구매 비용'을 얹어 답하지 않도록 가정을 명시.
+  form.addMultipleChoiceItem().setTitle('12. "앱을 열지 않아도, 손목의 워치에 담긴 내 설정대로 집이 맞춰진다"면 사용하시겠어요?')
+    .setHelpText('워치를 이미 갖고 있다고 가정하고 답해주세요')
     .setChoiceValues(['1 전혀 아니다', '2 아니다', '3 보통', '4 희망한다', '5 꼭 쓰고 싶다']).setRequired(true);
 
   // 금액 사다리 대신 성향 — 응답자가 상상 없이 답할 수 있는 값. 금액 what-if는 합성 패널 담당(SURVEY_PLAN §4)
@@ -100,6 +116,14 @@ function createSurveyForm() {
       '유료라도 쓸 의향이 있다',
     ]).setRequired(true);
 
+  // v3.1: 조건부(12번 '보통' 이상만) → **전원 대상**으로 전환 + '관심 없음' 보기 추가.
+  //       기존 설계는 "수용한 사람의 걱정"만 수확해, 가장 경계심 높은 거부자의 우려가
+  //       위협 모델(Epic 4)에 영영 들어오지 못했다 (John). 탈출구가 생겼으므로 필수화.
+  //       순서는 라이브 폼 기준 13 → 13-1 → 13-2 (applyV2가 만든 배치와 일치시킴).
+  form.addMultipleChoiceItem().setTitle('13-1. 이 기능에서 가장 걱정되는 점은 무엇인가요?')
+    .setChoiceValues(['워치를 항상 차고 있어야 함', '분실 시 보안', '설정이 복잡할 것 같음', '워치 배터리', '내 생활패턴이 기록되는 것', '오작동(원치 않는 자동 실행)', '걱정 없음', '이 기능에 관심 없음'])
+    .setRequired(true);
+
   form.addMultipleChoiceItem().setTitle('13-2. 돈을 낸다면 어떤 방식이 가장 자연스러울까요?')
     .setChoiceValues([
       '월 구독료',
@@ -109,16 +133,15 @@ function createSurveyForm() {
       '잘 모르겠다',
     ]).setRequired(true);
 
-  form.addMultipleChoiceItem().setTitle('13-1. (12번에서 "3 보통" 이상 선택하신 분만) 이 기능에서 가장 걱정되는 점은?')
-    .setChoiceValues(['워치를 항상 차고 있어야 함', '분실 시 보안', '설정이 복잡할 것 같음', '워치 배터리', '내 생활패턴이 기록되는 것', '오작동(원치 않는 자동 실행)', '걱정 없음'])
-    .setRequired(false);
-
   form.addParagraphTextItem().setTitle('14. (선택) ThinQ 앱 사용 중 최악의 경험 한 가지를 들려주세요')
     .setRequired(false);
 
   // 유입 채널 — Forms에 숨김 필드가 없어 문항+사전 채움 URL로 대체
   // 배포 시 채널별 사전 채움 링크 생성: 폼 편집 화면 ⋮ > '미리 채워진 링크 받기'
-  form.addMultipleChoiceItem().setTitle('15. 이 설문을 어디에서 보셨나요? (이미 선택되어 있으면 그대로 두세요)')
+  // v3.1: 스노볼 릴레이(SURVEY_PLAN §1)로 링크가 전달되면 사전채움 값이 따라가
+  //       전달받은 사람까지 원래 채널로 기록된다 → 편향 사후 점검용 데이터가 오염.
+  form.addMultipleChoiceItem().setTitle('15. 이 설문을 어디에서 보셨나요?')
+    .setHelpText('다른 곳에서 전달받으셨다면 실제로 보신 곳으로 바꿔주세요')
     .setChoiceValues(['맘카페', '당근 동네생활', '레몬테라스', '오늘의집', '지인 소개', '블라인드', '스마트싱스 카페', '클리앙·뽐뿌', 'LGDX', '기타'])
     .setRequired(true);
 
@@ -254,4 +277,109 @@ function applyV2() {
   Logger.log('13-2 신설, index ' + idx132);
 
   Logger.log('=== applyV2 완료 ===');
+}
+
+/**
+ * v3 → v3.1 문구 수정 (2026-07-22 파티 라운드)
+ * 실행: FORM_ID 폼에 대해 applyV3 실행. applyV2가 이미 적용된 폼이 전제.
+ *
+ * ⚠️ 실행 전 반드시 dumpResponses()로 기존 응답을 백업할 것.
+ * ⚠️ 문5·문13-1은 타입/보기 구조가 바뀌어 기존 응답이 깨질 수 있다 —
+ *    v2 파일럿 4건을 삭제한 뒤 실행하는 것을 전제로 한다.
+ *
+ * 근거: 톤앤매너 일관성(조사체 기준), 흐름(섹션4 홍보톤 제거),
+ *       핵심 타겟 포함 구조(Night Keeper = 잡 기반이지 유자녀가 아니다).
+ */
+function applyV3() {
+  const form = FormApp.openById(FORM_ID);
+  const items = form.getItems();
+  function find(prefix) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].getTitle().indexOf(prefix) === 0) return items[i];
+    }
+    return null;
+  }
+
+  // ── 1. 안내문: 문항 수·소요시간 정정 (13문항/3분 → 필수 18문항/5분)
+  form.setTitle('스마트홈(ThinQ) 사용 경험 5분 설문');
+  form.setDescription(
+    '안녕하세요! LG 스마트가전(ThinQ) 사용 경험에 대한 짧은 설문입니다.\n\n' +
+    '⏱ 약 5분 소요 (필수 18문항)\n' +
+    '🎁 응답자 중 추첨 5명께 기프티콘을 드립니다 (연락처는 추첨 희망자만 마지막에 선택 입력)\n\n' +
+    '· 본 설문은 LG전자 공식 설문이 아니며, 개인 리서치 프로젝트입니다.\n' +
+    '· 익명으로 진행되며, 응답은 통계 분석 목적으로만 사용 후 폐기됩니다.\n' +
+    '· 수집 항목: 가전 사용 경험·가구 형태 등 아래 문항 응답 (개인 식별 정보 수집 없음)'
+  );
+  Logger.log('1. 안내문 정정 완료 (5분 / 필수 18문항)');
+
+  // ── 2. 문5: '기타' → 자유기입. 인코딩은 그대로 NaN이지만 손실을 셀 수 있게 된다
+  const q5 = find('5.');
+  q5.setHelpText('가족 소유 집에 함께 사는 경우 등은 "기타"에 직접 적어주세요');
+  q5.asMultipleChoiceItem()
+    .setChoiceValues(['자가', '전세', '월세'])
+    .showOtherOption(true);
+  Logger.log('2. 문5 기타 자유기입 전환');
+
+  // ── 3. 문10: 질문(빈도) ↔ 척도(강도) 불일치 해소
+  find('10.').setTitle('10. 가전 앱의 회원가입·약관 동의·개인정보 요구가 얼마나 부담스러우셨나요?');
+  Logger.log('3. 문10 어간 교체 (빈도 → 강도)');
+
+  // ── 4. 문11-2 도움말: 육아 예시를 첫머리에서 뒤로
+  find('11-2.').setHelpText('예: 실내 온도 확인, 조명·에어컨 조절, 아이 방 상태 확인');
+  Logger.log('4. 문11-2 도움말 교체');
+
+  // ── 5. 문11-3: 육아 4→2, 비육아 야간 2개 추가, '특별히 없다' 신설
+  const q113 = find('11-3.');
+  q113.setTitle('11-3. 앱으로 가전을 확인·조절할 수 있다면 편할 것 같은 상황을 모두 골라주세요');
+  q113.asCheckboxItem().setChoiceValues([
+    '잠들기 전 침대에서 조명·에어컨 조절',
+    '자다 깨서 실내 온도·공기 확인',
+    '새벽 출근이나 야간 근무 전후로 집 상태 확인',
+    '밤중에 소음 걱정 없이 세탁기·건조기 예약',
+    '아이 재우고 나서 불·가전 끄기',
+    '자다 깨서 아이 방 온도·공기 확인',
+    '낮에 외출 중 집 상태 확인',
+    '특별히 없다',
+  ]);
+  q113.asCheckboxItem().showOtherOption(true);
+  Logger.log('5. 문11-3 보기 재구성 (육아 4→2, 야간 2 추가, 탈출구 신설)');
+
+  // ── 6. 문12: 광고 카피 톤 제거 + 워치 보유 가정 명시 (홀드아웃 변수 보호)
+  const q12 = find('12.');
+  q12.setTitle('12. "앱을 열지 않아도, 손목의 워치에 담긴 내 설정대로 집이 맞춰진다"면 사용하시겠어요?');
+  q12.setHelpText('워치를 이미 갖고 있다고 가정하고 답해주세요');
+  Logger.log('6. 문12 톤 평탄화 + 가정 명시');
+
+  // ── 7. 문13-1: 조건부 → 전원 대상, '관심 없음' 추가 후 필수화
+  const q131 = find('13-1.');
+  q131.setTitle('13-1. 이 기능에서 가장 걱정되는 점은 무엇인가요?');
+  q131.asMultipleChoiceItem().setChoiceValues([
+    '워치를 항상 차고 있어야 함',
+    '분실 시 보안',
+    '설정이 복잡할 것 같음',
+    '워치 배터리',
+    '내 생활패턴이 기록되는 것',
+    '오작동(원치 않는 자동 실행)',
+    '걱정 없음',
+    '이 기능에 관심 없음',
+  ]);
+  q131.asMultipleChoiceItem().setRequired(true);
+  Logger.log('7. 문13-1 전원 대상 전환 + 필수화');
+
+  // ── 8. 문15: 스노볼 전달 시 채널 오염 방지
+  const q15 = find('15.');
+  q15.setTitle('15. 이 설문을 어디에서 보셨나요?');
+  q15.setHelpText('다른 곳에서 전달받으셨다면 실제로 보신 곳으로 바꿔주세요');
+  Logger.log('8. 문15 도움말 교체');
+
+  // ── 9. 섹션4 제목: 홍보톤 제거
+  const sec4 = find('스마트워치와 새로운 방식');
+  if (sec4) {
+    sec4.setTitle('손목 기기 사용 경험');
+    Logger.log('9. 섹션4 제목 교체');
+  } else {
+    Logger.log('9. [WARN] 섹션4("스마트워치와 새로운 방식")를 찾지 못함 — 수동 확인 필요');
+  }
+
+  Logger.log('=== applyV3 완료 — verifyForm()으로 검수할 것 ===');
 }

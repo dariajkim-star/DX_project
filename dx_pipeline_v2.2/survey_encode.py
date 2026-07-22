@@ -48,7 +48,9 @@ MAP_Q13 = {
     "유료라도 쓸 의향이 있다": 2,
 }
 # 자가/전월세 이진 밖은 결측 — H2 분석에서 제외된다 (SURVEY_PLAN §2)
-MAP_Q5_TENURE = {"자가": 0.0, "전세": 1.0, "월세": 1.0, "기타": np.nan}
+# v3.1: 문5의 '기타'가 자유기입으로 바뀌어 임의 문자열이 들어온다. 결과는 어차피
+#       결측이지만, **얼마나·무엇 때문에 잃는지 세는 것**이 자유기입을 켠 이유다.
+MAP_Q5_TENURE = {"자가": 0.0, "전세": 1.0, "월세": 1.0}
 
 FEATURE_COLUMNS = [
     "LG가전수",        # 문1: 1/2/3 서열 (0대는 스크리닝 아웃이라 분석 대상 아님)
@@ -96,6 +98,27 @@ def map_strict(series: pd.Series, table: dict, qname: str) -> pd.Series:
     return series.map(table)
 
 
+def encode_tenure(series: pd.Series) -> pd.Series:
+    """문5 → 자가0 / 전월세1 / 그 외 결측.
+
+    v3.1에서 '기타'가 자유기입이 되어 임의 문자열이 들어온다. map_strict의
+    '매핑을 갱신하라' 경고는 여기선 오해를 부른다 — 자유기입은 정상 입력이고,
+    이진 밖이라 결측인 것뿐이다. 대신 **H2 표본을 얼마나 잃는지 집계해 보고**한다.
+    """
+    mapped = series.map(MAP_Q5_TENURE)
+    lost = series[mapped.isna() & series.notna()]
+    if len(lost):
+        counts = lost.astype(str).str.strip().value_counts()
+        pct = len(lost) / len(series) * 100
+        print(f"[H2] 문5 이진 밖 응답 {len(lost)}/{len(series)}건 ({pct:.1f}%) → 결측 처리")
+        for val, n in counts.items():
+            print(f"      · {val}: {n}건")
+        if pct >= 20:
+            print("      ⚠️ 20% 이상이 이진 밖 — H2 검정력이 크게 깎인다. "
+                  "보기 재설계를 검토할 것 (SURVEY_PLAN §2)")
+    return mapped
+
+
 def encode_survey(raw: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame(index=raw.index)
 
@@ -107,8 +130,7 @@ def encode_survey(raw: pd.DataFrame) -> pd.DataFrame:
     q4 = raw[find_col(raw, Q_PREFIX["q4"])].fillna("")
     out["자녀유무"] = q4.str.contains("자녀 있음").astype(int)
 
-    out["점유형태_전월세"] = map_strict(
-        raw[find_col(raw, Q_PREFIX["q5"])], MAP_Q5_TENURE, "문5")
+    out["점유형태_전월세"] = encode_tenure(raw[find_col(raw, Q_PREFIX["q5"])])
     out["이사계획"] = map_strict(raw[find_col(raw, Q_PREFIX["q6"])], MAP_Q6, "문6")
 
     q7 = raw[find_col(raw, Q_PREFIX["q7"])].fillna("")
@@ -130,8 +152,10 @@ def encode_survey(raw: pd.DataFrame) -> pd.DataFrame:
     out["지불의사"] = map_strict(raw[find_col(raw, Q_PREFIX["q13"])], MAP_Q13, "문13")
 
     # 군집 변수는 아니지만 교차 분석에 필요해 원문 그대로 실어 보낸다
-    for key, name in (("q11_3", "상황선택_원문"), ("q13_1", "걱정_원문"),
-                      ("q13_2", "과금형태_원문"), ("q15", "유입채널")):
+    # 문5 원문도 실어 보낸다 — '기타' 자유기입 내용이 보기 재설계의 1차 근거다 (v3.1)
+    for key, name in (("q5", "점유형태_원문"), ("q11_3", "상황선택_원문"),
+                      ("q13_1", "걱정_원문"), ("q13_2", "과금형태_원문"),
+                      ("q15", "유입채널")):
         try:
             out[name] = raw[find_col(raw, Q_PREFIX[key])]
         except KeyError:
