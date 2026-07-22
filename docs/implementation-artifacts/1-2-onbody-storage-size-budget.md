@@ -1,6 +1,10 @@
+---
+baseline_commit: 5f8264cd98a1e4b5f05c0780ea0e4f5e68b89ae6
+---
+
 # Story 1.2: 온바디 저장 및 크기 예산 검증
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -36,54 +40,54 @@ Epic 3(복원·이사)이 전부 이 결과 위에 선다.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: 예산 상수 정의** (AC: 1)
-  - [ ] `home_profile/storage.py` 신설. 예산을 **출처 있는 상수**로 고정:
+- [x] **Task 1: 예산 상수 정의** (AC: 1)
+  - [x] `home_profile/storage.py` 신설. 예산을 **출처 있는 상수**로 고정:
         `BUDGET_STORAGE_TOTAL = 128 * 1024` (Connect IQ Application.Storage 총량),
         `BUDGET_STORAGE_KEY = 8 * 1024` (키 1개당), `BLE_MTU = 20` (특성 write 상한).
         각 상수 옆에 출처 URL 주석 (PROFILE_SCHEMA.md §5의 조사 결과 승계)
-  - [ ] 안전 마진 정책 상수: 예산의 **80%를 실사용 상한**으로 (`MARGIN = 0.8`) —
+  - [x] 안전 마진 정책 상수: 예산의 **80%를 실사용 상한**으로 (`MARGIN = 0.8`) —
         펌웨어 차이·다른 CIQ 앱과의 공유를 감안한 설계 판단(근거 문서 없음으로 표기)
-- [ ] **Task 2: 대표 가정 샘플 생성기** (AC: 1)
-  - [ ] `make_sample_profile(n_devices, n_routines)` — 스키마 v2를 **통과하는**
+- [x] **Task 2: 대표 가정 샘플 생성기** (AC: 1)
+  - [x] `make_sample_profile(n_devices, n_routines)` — 스키마 v2를 **통과하는**
         합성 프로필 생성 (`validate_profile() == []`가 생성기의 계약)
-  - [ ] 대표 가정 3종을 상수로: `SMALL`(기기 5·루틴 3), `TYPICAL`(기기 12·루틴 8),
+  - [x] 대표 가정 3종을 상수로: `SMALL`(기기 5·루틴 3), `TYPICAL`(기기 12·루틴 8),
         `LARGE`(기기 30·루틴 20). ⚠️ **이 숫자는 실측이 아니다** — 아직 설문·실가전
         데이터가 없으므로 "설계 가정(실측 대기)"으로 코드 주석+문서에 명기.
         설문 문6(보유 가전 수)이 실측되면 그 분포로 교체한다
-  - [ ] 샘플의 문자열 값은 실제 길이 분포를 흉내 (setting_key 10~20자,
+  - [x] 샘플의 문자열 값은 실제 길이 분포를 흉내 (setting_key 10~20자,
         capability 5~15자) — 최상 케이스로 잰 예산은 예산이 아니다
-- [ ] **Task 3: 직렬화·역직렬화** (AC: 3, 4)
-  - [ ] `serialize(profile) -> bytes` — **JSON UTF-8이 기준 표현** (표준 라이브러리,
+- [x] **Task 3: 직렬화·역직렬화** (AC: 3, 4)
+  - [x] `serialize(profile) -> bytes` — **JSON UTF-8이 기준 표현** (표준 라이브러리,
         compact separators). 직렬화 전 `validate_profile()` 통과를 강제하고,
         위반 시 직렬화 거부 (위반 목록 반환 — 예외 금지 계약 승계)
-  - [ ] `deserialize(data: bytes) -> (profile | None, errors: list)` — 손상
+  - [x] `deserialize(data: bytes) -> (profile | None, errors: list)` — 손상
         바이트·비UTF-8·비JSON·**어떤 입력에도 예외 금지** (1.1 리뷰 계약 승계).
         역직렬화 직후 `validate_profile()` 재실행 — 와이어에서 온 것은 신뢰하지 않는다
-  - [ ] 버전 처리(AC4): `schema_version`이 `SUPPORTED_VERSIONS` 밖이면
+  - [x] 버전 처리(AC4): `schema_version`이 `SUPPORTED_VERSIONS` 밖이면
         **명시적 거부** + 사유에 버전 병기. 마이그레이션은 **미결정**(1.1 리뷰 F5
         판정 유지) — "거부"가 현재의 명시 처리이며, 조용한 통과만 금지다
-  - [ ] 왕복 검증(AC3): `deserialize(serialize(p)) == p` — 단 dict 키 순서는
+  - [x] 왕복 검증(AC3): `deserialize(serialize(p)) == p` — 단 dict 키 순서는
         의미가 아니므로 등가 비교. float 값 존재 시 반올림 손실 여부 확인
-- [ ] **Task 4: 크기 리포트** (AC: 1, 2)
-  - [ ] `size_report(profile) -> dict` — 전체 바이트 + **섹션별**(devices/settings/
+- [x] **Task 4: 크기 리포트** (AC: 1, 2)
+  - [x] `size_report(profile) -> dict` — 전체 바이트 + **섹션별**(devices/settings/
         routines) + **기기 1대당·루틴 1개당 평균** + 예산 대비 % + 판정
         (`within_budget: bool`, 마진 반영)
-  - [ ] 예산 초과 시 최대 기여 필드 상위 5개를 경로로 지목
+  - [x] 예산 초과 시 최대 기여 필드 상위 5개를 경로로 지목
         (예: `settings[d3]` 2,140B) — "어떤 필드가 원인인지"가 AC2의 문면이다
-  - [ ] BLE 관점 수치 병기: `ceil(총바이트 / BLE_MTU)` = 필요 청크 수.
+  - [x] BLE 관점 수치 병기: `ceil(총바이트 / BLE_MTU)` = 필요 청크 수.
         **청크 프로토콜 구현은 여전히 Epic 2 범위** — 여기서는 수만 계산한다
-- [ ] **Task 5: 예산 판정 실측 실행** (AC: 1)
-  - [ ] 대표 가정 3종 각각 직렬화 → 크기 리포트 → 8KB/키·128KB 총량 대비 판정.
+- [x] **Task 5: 예산 판정 실측 실행** (AC: 1)
+  - [x] 대표 가정 3종 각각 직렬화 → 크기 리포트 → 8KB/키·128KB 총량 대비 판정.
         결과 표를 `docs/PROFILE_SCHEMA.md`에 새 절(§크기 실측)로 기록 —
         수치는 **이 실행에서 나온 실측값만** 적는다(추정치 창작 금지)
-  - [ ] LARGE가 8KB/키를 넘으면: 원인 필드를 리포트로 지목하고, 대응(키 축약·
+  - [x] LARGE가 8KB/키를 넘으면: 원인 필드를 리포트로 지목하고, 대응(키 축약·
         섹션 분할 저장·압축)을 **구현하지 말고** 선택지+수치로 문서화 —
         결정은 사람 몫 (운영 원칙: 모르는 것은 수치화하지 않는다)
-- [ ] **Task 6: pytest 회귀 자산** — 1.1 리뷰 교훈 전면 적용
-  - [ ] `tests/test_home_profile_storage.py` 신설
-  - [ ] **스텁 판별 원칙**: '단어 언급' 단언 금지. 정확한 값·경계 단언
+- [x] **Task 6: pytest 회귀 자산** — 1.1 리뷰 교훈 전면 적용
+  - [x] `tests/test_home_profile_storage.py` 신설
+  - [x] **스텁 판별 원칙**: '단어 언급' 단언 금지. 정확한 값·경계 단언
         (v1 테스트는 검증 로직 0줄 스텁이 23/23 통과했다 — 같은 실수 반복 금지)
-  - [ ] 케이스: 왕복 등가(3종 샘플 전부) / 손상 바이트·잘린 바이트·비JSON에
+  - [x] 케이스: 왕복 등가(3종 샘플 전부) / 손상 바이트·잘린 바이트·비JSON에
         예외 없이 오류 목록 / 버전 불일치 명시 거부(사유에 버전 포함) /
         validate 미통과 프로필 직렬화 거부 / 크기 리포트 합산 정합(섹션 합 ≤ 전체,
         기여 필드 경로 실재) / 예산 판정 경계(마진 직전·직후) /
@@ -197,8 +201,73 @@ from home_profile import (SCHEMA_VERSION, SUPPORTED_VERSIONS,
 
 ### Agent Model Used
 
+claude-opus-4-8 (Claude Opus 4.8)
+
 ### Debug Log References
+
+- RED: `pytest tests/test_home_profile_storage.py` → collection error(모듈 부재)
+- GREEN: 동일 명령 → 30 passed
+- 회귀: `pytest tests/ -q` → **117 passed** (기준선 87 → +30, 회귀 0건)
+- 실측 실행 2회: 대표 가정 3종 크기 판정 + 대응 선택지 4종 비교(§크기 실측)
 
 ### Completion Notes List
 
+**AC 충족 근거**
+
+- **AC1 (크기 예산)**: SMALL 1,644B(25.1%)·TYPICAL 4,180B(63.8%)는 키 예산
+  6,553B 내. **LARGE 10,310B(157.3%)는 초과** — AC는 "예산 안에 들어간다"이므로
+  현재 구조로는 기기 30대 가정에서 **미충족**이며, 이 사실을 판정으로 보고한다
+  (초과를 숨기지 않는 것이 AC2의 존재 이유다). 총량 예산 대비로는 9.8%라
+  문제는 저장 공간이 아니라 **키 1개당 8KB 상한**임이 확인됐다.
+- **AC2 (크기 리포트)**: `size_report()`가 섹션별·단위당·상위 기여 필드 경로를
+  낸다. LARGE 초과 시 `routines[7] 264B` 식으로 지목되며, `resolve_path()`로
+  경로가 실재함을 테스트가 검증한다. 검증 미통과 프로필에도 리포트가 나온다
+  (초과 진단이 목적이므로 그때 프로필은 대개 정상이 아니다).
+- **AC3 (왕복 무손실)**: 3종 샘플 + 빈 프로필 전부 `deserialize(serialize(p)) == p`,
+  스칼라 타입 보존(bool이 int로 붕괴하지 않음) 확인, 왕복 후 재검증도 통과.
+- **AC4 (버전 명시 처리)**: 지원 밖 버전은 **명시적 거부** + 사유에 버전 문자열
+  병기. 마이그레이션 미구현·미결정 유지(1.1 리뷰 F5) — 빈 훅을 만들지 않았고,
+  `MIGRATIONS`/`migrate` 부재를 테스트가 고정한다.
+
+**계승 계약 이행 (1.1 리뷰 유래)**
+- 예외 금지: `serialize`·`deserialize`·`size_report` 전부 fail-closed.
+  0바이트·잘린 JSON·비UTF8·비객체·BOM·깊이 1500 폭탄·비bytes 입력 전부
+  오류 목록으로 반환(크래시 0건, 테스트로 고정)
+- 와이어 불신: `deserialize`가 역직렬화 직후 `validate_profile()` 재실행
+- 직렬화 게이트: 검증 미통과 프로필은 직렬화 거부 — PII 담긴 프로필이
+  와이어로 나가는 경로를 막는다(1.1 방어선이 저장 계층에서도 유효함을 테스트)
+- 스텁 판별: '단어 언급' 단언 없음. 왕복은 `==`, 리포트는 합산 정합·경로 실재,
+  예산 판정은 `monkeypatch`로 경계를 실제로 넘겨 뒤집힘 확인
+
+**정직 표기**
+- 대표 가정(기기 5/12/30)은 실측이 아니다 — `SAMPLE_ASSUMPTIONS_ARE_MEASURED
+  = False` 상수와 `SAMPLE_ASSUMPTION_NOTE`로 코드가 스스로 밝히며, 테스트가
+  이 라벨을 고정한다. 설문 문6 실측 시 교체. **실측인 것은 바이트 수뿐이다.**
+- 대응 선택지 4종은 실행해서 재고 **구현하지 않았다** — 결정은 사람 몫.
+
+**사람 결정 필요 (미해결)**
+1. **LARGE 초과 대응 선택**: A 섹션 분할(최대 키 4,511B, 스키마 변경 불필요,
+   단 Epic 3에서 원자성 필요) vs C zlib(1,257B, −87.8%, stdlib) vs B+C.
+2. **C의 선행 조건**: Connect IQ(Monkey C)에 압축 해제가 있는지 **미확인**.
+   없으면 C는 성립하지 않으며, 확인 전까지 A가 유일하게 검증된 경로다.
+3. 대표 가정 자체가 과대할 수 있다 — 실가구 기기 수가 19대 이하면 현재
+   단일 키 구조로 충분하다. **설문 문6이 이 결정의 실측 근거가 된다.**
+
 ### File List
+
+**신규**
+- `home_profile/storage.py`
+- `tests/test_home_profile_storage.py`
+
+**수정**
+- `home_profile/__init__.py` (storage API export + `__all__`)
+- `docs/PROFILE_SCHEMA.md` (§5.1 크기 실측 + 대응 선택지 신설)
+- `docs/implementation-artifacts/1-2-onbody-storage-size-budget.md` (본 파일)
+
+`home_profile/schema.py` 무변경, 새 의존성 0건.
+
+## Change Log
+
+| 날짜 | 변경 |
+|---|---|
+| 2026-07-22 | Story 1.2 구현 — storage.py(직렬화·역직렬화·크기 리포트) + 회귀 30건. 실측: SMALL 1,644B / TYPICAL 4,180B / LARGE 10,310B(키 예산 157.3% 초과). 대응 선택지 4종 실측 후 미구현(사람 결정 대기). 전체 117 passed |

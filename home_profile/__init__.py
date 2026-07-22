@@ -8,6 +8,15 @@
 리뷰 반영(2026-07-22): MIGRATIONS(아무도 읽지 않는 가변 전역) 표면에서 제거,
 SUPPORTED_VERSIONS(호출자가 읽을 정당한 이유가 있는 불변값) 추가, __all__ 명시.
 """
+from .storage import (
+    BLE_MTU,
+    BUDGET_STORAGE_KEY,
+    BUDGET_STORAGE_TOTAL,
+    deserialize,
+    make_sample_profile,
+    serialize,
+    size_report,
+)
 from .schema import (
     SCHEMA_VERSION,
     SUPPORTED_VERSIONS,
@@ -19,11 +28,18 @@ from .schema import (
 )
 
 __all__ = [
+    "BLE_MTU",
+    "BUDGET_STORAGE_KEY",
+    "BUDGET_STORAGE_TOTAL",
     "SCHEMA_VERSION",
     "SUPPORTED_VERSIONS",
     "TOP_LEVEL_KEYS",
     "find_identifier_violations",
     "is_supported",
+    "deserialize",
+    "make_sample_profile",
     "new_profile",
+    "serialize",
+    "size_report",
     "validate_profile",
 ]
