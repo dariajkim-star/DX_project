@@ -10,6 +10,13 @@ SUPPORTED_VERSIONS(호출자가 읽을 정당한 이유가 있는 불변값) 추
 2차 리뷰 반영: make_sample_profile은 테스트·문서 생성 전용이라 제품 표면에서
 제외(home_profile.storage로 직접 접근). size_report는 (report, errors) 튜플 규약.
 """
+from .carrier import (
+    CapabilityValue,
+    Carrier,
+    CarrierCapabilities,
+    CarrierStatus,
+    MemoryCarrier,
+)
 from .storage import (
     BLE_MTU,
     BUDGET_PER_KEY,
@@ -32,6 +39,11 @@ from .schema import (
 
 __all__ = [
     "BLE_MTU",
+    "CapabilityValue",
+    "Carrier",
+    "CarrierCapabilities",
+    "CarrierStatus",
+    "MemoryCarrier",
     "BUDGET_PER_KEY",
     "BUDGET_STORAGE_TOTAL",
     "CHUNK_KINDS",
