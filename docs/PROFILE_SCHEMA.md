@@ -260,3 +260,70 @@ if errs:
 `params`·`devices`·`routines`)과 정수 크기 상한이 생기기 전까지, 이 스키마 위의
 어떤 크기 예산도 보증이 아니다. 상한이 정해지면 **최악 케이스 프로필**로 다시
 측정해야 한다 — 픽스처가 아니라.
+
+
+## 5.3 Connect IQ 실증 조사 (2026-07-22) — 예산 상수·포맷 선택이 뒤집힘
+
+§5의 "약 8KB/키" 수치와 §5.1의 zlib 선택지를 공식 문서로 검증한 결과, **셋이 뒤집혔다.**
+
+### ① zlib(선택지 C)는 성립하지 않는다 — 확정
+
+Connect IQ 최상위 Toybox 모듈 전수 확인 결과 **압축/해제 API가 존재하지 않는다.**
+- `Toybox.Cryptography`: Cipher·Hash·HMAC·CMAC·Key·randomBytes만. inflate 없음
+- `Toybox.StringUtil`: `encodeBase64`·`convertEncodedString` — **인코딩이지 압축이 아니다**
+  (Base64는 오히려 33% 팽창)
+- `Toybox.Lang.ByteArray`: `encodeNumber`/`decodeNumber`/`slice`만
+
+순수 Monkey C로 inflate를 직접 구현하는 것 외엔 경로가 없고, 28~128KB 힙에서
+코드 크기와 임시 버퍼를 둘 다 지불하는 나쁜 거래다. **선택지 C 폐기.**
+
+### ② 8KB는 Storage가 아니라 Properties의 한계였다 — 상수 수정 필요
+
+공식 문서 [Application.Storage](https://developer.garmin.com/connect-iq/api-docs/Toybox/Application/Storage.html):
+> "values are limited to **32 KB** in size" (총량은 기기별로 다름)
+
+우리가 §5에서 인용한 "약 8KB/키"는 **6년 전 포럼 글의 질문자 서술**이었고, 후속
+스레드에서 그 8KB는 `Application.Properties`(`.set`/`.str` 파일) 한계이며
+`Application.Storage.setValue()`는 다른 파일·더 큰 한계를 쓴다고 구분된다.
+**즉 `BUDGET_STORAGE_KEY = 8192`는 잘못된 상수다.**
+
+⚠️ 다만 32KB도 맹신 불가: 공식 문서가 총량은 "기기별로 다르다"고 명시하고,
+실제 펌웨어에서 `Storage.setValue()`가 System Error를 던지는 미해결 버그 리포트가
+있다(361건, 2024-06). **쓰기는 `StorageFullException` try/catch로 감싸고
+실기기에서 검증해야 한다.**
+
+### ③ Monkey C에 런타임 JSON 파서가 없다 — 포맷 결정 재검토 필요
+
+`parseJson(String)`에 해당하는 API가 **존재하지 않는다.**
+- `Communications.makeWebRequest`의 JSON 파싱은 **HTTP 통신 계층에서만** 일어난다
+  — 이미 손에 든 문자열이나 BLE로 받은 바이트에는 쓸 수 없다
+- `Rez.JsonData`는 **컴파일 타임**에 파싱되어 앱에 박히는 읽기 전용 리소스
+
+즉 JSON을 온워치 포맷으로 쓰면 **파서를 직접 작성해야 한다**. 게다가 10KB 문자열 +
+파싱된 Dictionary를 동시에 들면 Monkey C Dictionary의 항목당 오버헤드 때문에
+30~40KB로 부풀 수 있고, 저사양 기기(데이터필드 ~28KB 가용)에서는 OOM이다.
+
+### 저장 대안 — 임의 파일 쓰기는 불가 (확정)
+
+| 수단 | 판정 |
+|---|---|
+| `Application.Storage` | **최선.** ByteArray·Dictionary 지원, 값당 32KB |
+| `Application.Properties` | 더 나쁨 — 이게 실제 ~8KB 풀이며 사용자 설정용 |
+| `PersistedContent` | 경로·웨이포인트·코스·운동 전용 |
+| `FitContributor` | 활동 FIT 파일용, 설정 복원 불가 |
+| `Rez.JsonData` | 읽기 전용, 런타임 쓰기 불가 |
+
+**Connect IQ 앱은 임의 파일을 쓸 수 없다. 파일시스템 API가 없다.**
+
+### 조사 결론이 제안하는 방향 (결정은 사람 몫)
+
+1. **선택지 C(zlib) 폐기** — 성립하지 않음
+2. **선택지 A(Storage 키 분할) 채택** — 단 32KB를 맹신하지 말고 4~8KB로 보수적 분할
+3. **JSON을 온워치 포맷에서 내리는 것을 검토** — `ByteArray` + `encodeNumber`/
+   `decodeNumber`/`slice` 기반 바이너리 TLV. 파서 문제가 사라지고, 압축 없이도
+   페이로드가 zlib 목표치(1,257B)에 근접하며, 피크 RAM이 급감한다.
+   기성품으로 [msgpack-monkeyc](https://github.com/douglasr/msgpack-monkeyc)도 존재
+4. **최저 사양 타깃에서 `System.getSystemStats().freeMemory` 실측** 후 확정
+
+⚠️ 단, §5.2의 선행 조건이 여전히 우선한다 — **스키마에 개수 상한이 없는 한
+어떤 포맷·어떤 예산도 보증이 아니다.**
