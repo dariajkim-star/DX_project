@@ -103,6 +103,25 @@ _MAX_STR = 256        # 폭주 문자열 상한
 _MAX_INT_DIGITS = 20  # int64 범위를 덮는다. 가전 설정값에 이보다 큰 수는 없다.
 _VERSION_SHOW_RE = re.compile(r"[0-9A-Za-z.]{1,16}")
 
+# ---------- 개수 상한 (2차 리뷰 Grumbal F1 / 결정 ④ A+C) ----------
+# v2까지는 원소 하나의 '길이'만 제한하고 '개수'는 무제한이었다. 그래서 같은
+# 기기 12대·루틴 8개로 4,180B도 되고 23,395B(예산 357%)도 됐다 —
+# 크기 예산이 스키마가 아니라 픽스처의 속성이었다는 뜻이다.
+#
+# ⚠️ 아래 숫자는 **사용자 현실 기반 설계 가정이며 실측이 아니다.**
+#    근거: Night Keeper 페르소나 = LG 풀가전 아파트(CX_DEFINITION §3).
+#    설문 문6(보유 가전 수)이 실측되면 그 분포로 교체한다.
+#    상한을 정한 뒤 **최악 케이스를 실제로 측정해 예산과 대조**한다(결정 ④ C).
+MAX_DEVICES = 30                  # 풀가전 아파트 상한 가정
+MAX_ROUTINES = 20
+MAX_CAPABILITIES_PER_DEVICE = 12
+MAX_SETTINGS_PER_DEVICE = 12      # capability 수를 넘을 이유가 없다
+MAX_ACTIONS_PER_ROUTINE = 10
+MAX_TRIGGER_PARAMS = 5
+# 가전 설정값은 열거형·수치다. 256자는 자유 텍스트를 허용하던 잔재 —
+# 값 하나가 최악 케이스 크기를 좌우하므로 현실 수준으로 조인다.
+_MAX_SETTING_STR = 64
+
 
 def _redact(v) -> str:
     """신뢰 불가 값을 위반 메시지에 넣지 않는다 (2차 리뷰 Vex F3).
@@ -270,6 +289,12 @@ def _check_keyname(v, path, name) -> list:
     return []
 
 
+def _check_count(n, limit, path, what) -> list:
+    if n > limit:
+        return [f"{path} {what} {n}개 — 상한 {limit}개 초과"]
+    return []
+
+
 def _check_dict_shape(obj, allowed, required, path) -> list:
     """dict 여부 + 미지 키 + 필수 키. dict가 아니면 그 사유만 반환."""
     if not isinstance(obj, dict):
@@ -305,7 +330,8 @@ def _validate_devices(devices):
         return None, ["devices가 null — 스킵이 아니라 위반(배열이어야 함)"]
     if not isinstance(devices, list):
         return None, [f"devices는 배열이어야 함({type(devices).__name__})"]
-    errs, refs = [], set()
+    errs = _check_count(len(devices), MAX_DEVICES, "devices", "기기")
+    refs = set()
     for i, d in enumerate(devices):
         path = f"devices[{i}]"
         shape = _check_dict_shape(d, DEVICE_KEYS, DEVICE_REQUIRED, path)
@@ -326,6 +352,8 @@ def _validate_devices(devices):
         if not isinstance(caps, list):
             errs.append(f"{path}.capabilities는 배열이어야 함")
         else:
+            errs += _check_count(len(caps), MAX_CAPABILITIES_PER_DEVICE,
+                                 f"{path}.capabilities", "항목")
             for j, c in enumerate(caps):
                 errs += _check_keyname(c, f"{path}.capabilities[{j}]", "항목")
     return refs, errs
@@ -349,7 +377,11 @@ def _validate_settings(settings, refs) -> list:
         if not isinstance(kv, dict):
             errs.append(f"{path}는 객체여야 함({type(kv).__name__})")
             continue
+        errs += _check_count(len(kv), MAX_SETTINGS_PER_DEVICE, path, "설정")
         for k, v in kv.items():
+            if isinstance(v, str) and len(v) > _MAX_SETTING_STR:
+                errs.append(f"{path}.{_redact(k)} 값 {len(v)}자 — "
+                            f"설정값 상한 {_MAX_SETTING_STR}자 초과")
             errs += _check_keyname(k, path, "setting_key")
             if not _is_scalar(v):
                 errs.append(f"{path}.{_redact(k)} 값은 스칼라(str/int/float/bool, "
@@ -369,8 +401,12 @@ def _validate_action(a, refs, path) -> list:
         errs.append(f"{path}가 미등록 기기 {ref!r}를 참조")
     if "setting_key" in a:
         errs += _check_keyname(a["setting_key"], path, "setting_key")
-    if "value" in a and not _is_scalar(a["value"]):
-        errs.append(f"{path}.value는 스칼라여야 함")
+    if "value" in a:
+        if not _is_scalar(a["value"]):
+            errs.append(f"{path}.value는 스칼라여야 함")
+        elif isinstance(a["value"], str) and len(a["value"]) > _MAX_SETTING_STR:
+            errs.append(f"{path}.value {len(a['value'])}자 — "
+                        f"설정값 상한 {_MAX_SETTING_STR}자 초과")
     return errs
 
 
@@ -379,7 +415,7 @@ def _validate_routines(routines, refs) -> list:
         return ["routines가 null — 스킵이 아니라 위반(배열이어야 함)"]
     if not isinstance(routines, list):
         return [f"routines는 배열이어야 함({type(routines).__name__})"]
-    errs = []
+    errs = _check_count(len(routines), MAX_ROUTINES, "routines", "루틴")
     for i, r in enumerate(routines):
         path = f"routines[{i}]"
         errs += _check_dict_shape(r, ROUTINE_KEYS, ("trigger", "actions"), path)
@@ -396,6 +432,8 @@ def _validate_routines(routines, refs) -> list:
                 if not isinstance(params, dict):
                     errs.append(f"{path}.trigger.params는 객체여야 함")
                 else:
+                    errs += _check_count(len(params), MAX_TRIGGER_PARAMS,
+                                         f"{path}.trigger.params", "항목")
                     for k, v in params.items():
                         errs += _check_keyname(k, f"{path}.trigger.params", "키")
                         if not _is_scalar(v):
@@ -406,6 +444,8 @@ def _validate_routines(routines, refs) -> list:
             if not isinstance(actions, list) or not actions:
                 errs.append(f"{path}.actions는 비어있지 않은 배열이어야 함")
             else:
+                errs += _check_count(len(actions), MAX_ACTIONS_PER_ROUTINE,
+                                     f"{path}.actions", "액션")
                 for j, a in enumerate(actions):
                     errs += _validate_action(a, refs, f"{path}.actions[{j}]")
     return errs

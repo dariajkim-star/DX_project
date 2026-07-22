@@ -249,24 +249,36 @@ def test_top_contributors_are_real_paths(large):
         assert len(st._dumps(seq[entry["index"]])) == entry["bytes"]
 
 
-def test_budget_verdict_fields(typical):
+def test_budget_verdicts_are_reported_as_a_range(typical):
+    """결정 ③ C: 단일 판정 금지 — 참조 예산 3종 각각에 single/split 병기"""
     rep, _ = st.size_report(typical)
-    assert isinstance(rep["within_key_budget"], bool)
-    # within_total_budget은 삭제됨 — 키 예산이 총량보다 작아 항상 True였다(Yui F6)
-    assert "within_total_budget" not in rep
-    assert rep["key_budget_bytes"] == int(st.BUDGET_STORAGE_KEY * st.MARGIN)
-    assert rep["pct_of_key_budget"] == pytest.approx(
-        100 * rep["total_bytes"] / rep["key_budget_bytes"], rel=1e-6)
+    assert set(rep["budget_verdicts"]) == {"보수", "포럼", "공식"}
+    for label, budget in st.BUDGET_REFERENCES:
+        v = rep["budget_verdicts"][label]
+        assert v["budget_bytes"] == budget
+        assert v["single"] is (rep["total_bytes"] <= budget)
+        assert v["split"] is (rep["max_section_bytes"] <= budget)
+    # 근거 없는 MARGIN 단일 판정은 제거됐다 (2차 리뷰 Grumbal F4)
+    assert not hasattr(st, "MARGIN")
+    assert "within_key_budget" not in rep and "pct_of_key_budget" not in rep
 
 
-def test_budget_boundary_exact(monkeypatch):
-    """마진 직전·직후 판정이 뒤집히는지 — 경계를 실제로 넘겨본다"""
+def test_budget_verdict_flips_at_boundary(monkeypatch):
+    """경계를 실제로 넘겨 판정이 뒤집히는지 — 스텁 방지"""
     p = st.make_sample_profile(3, 2)
     total = st.size_report(p)[0]["total_bytes"]
-    monkeypatch.setattr(st, "BUDGET_STORAGE_KEY", int(total / st.MARGIN) + 8)
-    assert st.size_report(p)[0]["within_key_budget"] is True
-    monkeypatch.setattr(st, "BUDGET_STORAGE_KEY", int(total / st.MARGIN) - 8)
-    assert st.size_report(p)[0]["within_key_budget"] is False
+    monkeypatch.setattr(st, "BUDGET_REFERENCES", (("t", total + 1),))
+    assert st.size_report(p)[0]["budget_verdicts"]["t"]["single"] is True
+    monkeypatch.setattr(st, "BUDGET_REFERENCES", (("t", total - 1),))
+    assert st.size_report(p)[0]["budget_verdicts"]["t"]["single"] is False
+
+
+def test_max_section_is_the_largest_measured(typical):
+    """결정 ⑤ A: 섹션 분할 판정의 기준은 가장 큰 섹션이다"""
+    rep, _ = st.size_report(typical)
+    assert rep["max_section"] in st.SECTION_KEYS
+    assert rep["max_section_bytes"] == max(rep["sections"].values())
+    assert rep["max_section_bytes"] <= rep["total_bytes"]
 
 
 def test_ble_chunk_count(typical):
@@ -286,7 +298,8 @@ def test_size_report_never_raises_on_invalid():
     bad["devices"][0]["capabilities"] = {1, 2}
     rep, errs = st.size_report(bad)
     assert rep["total_bytes"] is None
-    assert rep["within_key_budget"] is None      # True가 아니다
+    for v in rep["budget_verdicts"].values():
+        assert v["single"] is None               # True가 아니다
     assert errs
 
 

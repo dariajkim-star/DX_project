@@ -12,8 +12,9 @@ SUPPORTED_VERSIONS(호출자가 읽을 정당한 이유가 있는 불변값) 추
 """
 from .storage import (
     BLE_MTU,
-    BUDGET_STORAGE_KEY,
+    BUDGET_REFERENCES,
     BUDGET_STORAGE_TOTAL,
+    SECTION_KEYS,
     deserialize,
     serialize,
     size_report,
@@ -30,8 +31,9 @@ from .schema import (
 
 __all__ = [
     "BLE_MTU",
-    "BUDGET_STORAGE_KEY",
+    "BUDGET_REFERENCES",
     "BUDGET_STORAGE_TOTAL",
+    "SECTION_KEYS",
     "SCHEMA_VERSION",
     "SUPPORTED_VERSIONS",
     "TOP_LEVEL_KEYS",

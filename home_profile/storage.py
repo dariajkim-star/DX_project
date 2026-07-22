@@ -33,18 +33,32 @@ from .schema import (
     validate_profile,
 )
 
-# ---------- 예산 상수 ----------
-# 출처: Garmin Connect IQ 개발자 포럼 (2026-07-22 조사, PROFILE_SCHEMA.md §5)
-#   https://forums.garmin.com/developer/connect-iq/f/discussion/2661/storage-available
-#   https://forums.garmin.com/developer/connect-iq/f/discussion/196823/
-# ⚠️ 포럼발 수치이며 공식 문서 보증이 아니다 — MARGIN을 두는 이유 중 하나.
-BUDGET_STORAGE_TOTAL = 128 * 1024   # Application.Storage 총량 (약 128KB)
-BUDGET_STORAGE_KEY = 8 * 1024       # Storage 키 1개당 (약 8KB)
+# ---------- 예산 참조값 (결정 ③ C: 구간 표기) ----------
+# v2까지는 BUDGET_STORAGE_KEY(8,192) × MARGIN(0.8) = 6,553B 하나로 판정했다.
+# 2차 리뷰(Grumbal F4)에서 드러난 문제: MARGIN은 안전 마진이 아니라 **판정
+# 결정 변수**였다(0.5면 TYPICAL이 뒤집힘). 근거 문서 없는 상수를 곱한 값을
+# 0.1% 단위로 보고하는 것은 정밀도 착시다.
+#
+# 그래서 단일 판정을 버리고 **구간으로 보고**한다 — 어느 예산을 쓸지는
+# 실기기 실측(결정 ②)으로 확정될 때까지 열어둔다.
+#
+#  · 보수(4,096B)  — 포럼 수치의 절반. 펌웨어 편차·타 CIQ 앱 공유를 감안한 하한
+#  · 포럼(8,192B)  — 6년 전 포럼 글. 후속 스레드에서 이 값은 실제로는
+#                    Application.Properties의 한계로 구분됨 (PROFILE_SCHEMA §5.3)
+#  · 공식(32,768B) — Application.Storage 공식 문서 "values are limited to 32 KB".
+#                    단 총량은 "기기별로 다름"이고 setValue System Error 버그 존재
+BUDGET_REFERENCES = (
+    ("보수", 4 * 1024),
+    ("포럼", 8 * 1024),
+    ("공식", 32 * 1024),
+)
+BUDGET_STORAGE_TOTAL = 128 * 1024   # Application.Storage 총량 (포럼발, 미확정)
 BLE_MTU = 20                        # BLE 특성 read/write 상한, long write 미지원
 
-# 설계 판단(근거 문서 없음): 예산의 80%를 실사용 상한으로 본다.
-# 펌웨어별 편차 + 다른 CIQ 앱과의 공유 + 포럼 수치의 불확실성에 대한 마진.
-MARGIN = 0.8
+# 저장 전략(결정 ⑤ A): **섹션 분할** — meta/devices/settings/routines를
+# 각각 별도 Storage 키에 넣는다. 판정은 '전체가 한 키에 들어가는가'(single)와
+# '가장 큰 섹션이 한 키에 들어가는가'(split) 둘 다 보고한다.
+SECTION_KEYS = ("devices", "settings", "routines")
 
 # 와이어 입력 하드 캡 (2차 리뷰 Vex F5). v1은 길이 검사가 전혀 없어
 # 기기 20만대·15.6MB 프로필이 deserialize를 통과했다 — 예산의 1,900배이자
@@ -238,25 +252,24 @@ def _safe_len(obj):
 def size_report(profile):
     """직렬화 크기 분석. 반환 **(report: dict, errors: list)**.
 
-    2차 리뷰(Yui F1): v1은 dict를 돌려주고 실패 시에만 "error" 키를 슬쩍 넣었다.
-    이 패키지의 다른 두 함수는 튜플 규약인데 여기만 옵트인 오류 처리였고,
-    아무도 옵트인하지 않았다 — format_report가 error를 무시하고 "예산 내"를
-    출력한 게 그 증거다. 규약을 하나로 맞춘다.
+    결정 ③ C(구간 표기): 단일 예산·단일 판정을 내지 않는다. 실기기 실측(결정 ②)
+    전까지 어느 값이 맞는지 모르므로 참조 예산 3종 각각에 대해 판정을 병기한다.
+    결정 ⑤ A(섹션 분할): 판정은 두 축이다 —
+      single = 프로필 전체가 Storage 키 하나에 들어가는가
+      split  = 가장 큰 섹션이 Storage 키 하나에 들어가는가
 
-    검증 미통과 프로필에도 리포트가 나온다 — 예산 초과 원인을 찾는 것이 목적이고,
-    그때 프로필은 대개 정상이 아니기 때문이다. 다만 **측정 실패는 0이 아니라
-    None**으로 전파하고 errors에 남긴다(fail-closed, Yui F2 / Boundary F1).
+    검증 미통과 프로필에도 리포트가 나온다(예산 초과 원인 진단이 목적).
+    측정 실패는 0이 아니라 None으로 전파하고 errors에 남긴다(fail-closed).
     """
-    key_budget = int(BUDGET_STORAGE_KEY * MARGIN)
     errors = []
     rep = {
         "total_bytes": None,
-        "sections": {"devices": None, "settings": None, "routines": None},
+        "sections": {k: None for k in SECTION_KEYS},
+        "max_section_bytes": None,
+        "max_section": None,
         "bytes_per_device": None,
         "bytes_per_routine": None,
-        "key_budget_bytes": key_budget,
-        "pct_of_key_budget": None,
-        "within_key_budget": None,     # 측정 실패 시 True가 아니라 None
+        "budget_verdicts": {},
         "ble_chunks": None,
         "top_contributors": [],
     }
@@ -270,7 +283,7 @@ def size_report(profile):
             errors.append("전체 직렬화 실패 — 크기 측정 불가(직렬화 불가 값 포함)")
 
         contributors = []
-        for section in ("devices", "settings", "routines"):
+        for section in SECTION_KEYS:
             node = profile.get(section)
             if node is None:
                 continue
@@ -287,6 +300,11 @@ def size_report(profile):
                 if b is not None:
                     contributors.append({"section": section, "index": i, "bytes": b})
 
+        measured = {k: v for k, v in rep["sections"].items() if v is not None}
+        if measured:
+            rep["max_section"] = max(measured, key=measured.get)
+            rep["max_section_bytes"] = measured[rep["max_section"]]
+
         devices = profile.get("devices")
         if isinstance(devices, list) and devices and rep["sections"]["devices"]:
             rep["bytes_per_device"] = rep["sections"]["devices"] / len(devices)
@@ -294,10 +312,15 @@ def size_report(profile):
         if isinstance(routines, list) and routines and rep["sections"]["routines"]:
             rep["bytes_per_routine"] = rep["sections"]["routines"] / len(routines)
 
-        if total is not None:
-            rep["pct_of_key_budget"] = 100 * total / key_budget if key_budget else None
-            rep["within_key_budget"] = total <= key_budget
-            rep["ble_chunks"] = math.ceil(total / BLE_MTU) if BLE_MTU > 0 else None
+        mx = rep["max_section_bytes"]
+        for label, budget in BUDGET_REFERENCES:
+            rep["budget_verdicts"][label] = {
+                "budget_bytes": budget,
+                "single": (total <= budget) if total is not None else None,
+                "split": (mx <= budget) if mx is not None else None,
+            }
+        if total is not None and BLE_MTU > 0:
+            rep["ble_chunks"] = math.ceil(total / BLE_MTU)
         contributors.sort(key=lambda c: c["bytes"], reverse=True)
         rep["top_contributors"] = contributors[:5]
     except Exception as e:   # fail-closed
