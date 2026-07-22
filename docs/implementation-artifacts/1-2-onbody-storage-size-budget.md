@@ -4,7 +4,7 @@ baseline_commit: 5f8264cd98a1e4b5f05c0780ea0e4f5e68b89ae6
 
 # Story 1.2: 온바디 저장 및 크기 예산 검증
 
-Status: review
+Status: changes-requested
 
 ## Story
 
@@ -270,4 +270,5 @@ claude-opus-4-8 (Claude Opus 4.8)
 
 | 날짜 | 변경 |
 |---|---|
+| 2026-07-22 | **Code Review Crew 2차 평결: changes-requested.** §5.1 판정 철회 — 측정 대상이 스키마가 아니라 합성 픽스처였다. 스키마 최대 길이로 같은 12·8이 23,395B(357%). 상세 §5.2 |
 | 2026-07-22 | Story 1.2 구현 — storage.py(직렬화·역직렬화·크기 리포트) + 회귀 30건. 실측: SMALL 1,644B / TYPICAL 4,180B / LARGE 10,310B(키 예산 157.3% 초과). 대응 선택지 4종 실측 후 미구현(사람 결정 대기). 전체 117 passed |
