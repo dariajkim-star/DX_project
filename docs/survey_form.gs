@@ -383,3 +383,106 @@ function applyV3() {
 
   Logger.log('=== applyV3 완료 — verifyForm()으로 검수할 것 ===');
 }
+
+/**
+ * v3.1 적용 결과 자동 검수 (2026-07-22 신설)
+ *
+ * applyV3()가 "verifyForm()으로 검수할 것"이라 지시하면서 정작 함수가 없었다 —
+ * 파괴적 변경(문5·문13-1 구조 변경, 파일럿 4건 삭제) 직후의 검수를 눈에만
+ * 맡기고 있었다. P-2 오탐 16.1%를 눈검수로 잡아낸 프로젝트의 기준에 미달.
+ *
+ * 실행: applyV3() 다음에 verifyForm(). 로그의 [FAIL]이 0건이어야 배포 가능.
+ * 이 함수는 폼을 수정하지 않는다 (읽기 전용).
+ */
+function verifyForm() {
+  const form = FormApp.openById(FORM_ID);
+  const items = form.getItems();
+  let fail = 0, pass = 0;
+
+  function check(label, cond, detail) {
+    if (cond) {
+      pass++;
+      Logger.log('[OK]   ' + label);
+    } else {
+      fail++;
+      Logger.log('[FAIL] ' + label + (detail ? ' — ' + detail : ''));
+    }
+  }
+  function find(prefix) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].getTitle().indexOf(prefix) === 0) return items[i];
+    }
+    return null;
+  }
+
+  // ── A. 안내문: 정직 고지 바로 위의 수치가 실제 필수 문항 수와 맞는가
+  const desc = form.getDescription();
+  check('안내문 소요시간 5분', desc.indexOf('5분') !== -1);
+  check('안내문 필수 18문항', desc.indexOf('필수 18문항') !== -1);
+  check('안내문 LG 공식 아님 고지', desc.indexOf('공식 설문이 아니며') !== -1);
+
+  // 실제 필수 문항 수를 세어 안내문과 대조 — v3.1의 발단이 '13문항인데 17문항'이었다
+  let required = 0;
+  items.forEach(function (it) {
+    const t = it.getType();
+    try {
+      if (t === FormApp.ItemType.MULTIPLE_CHOICE && it.asMultipleChoiceItem().isRequired()) required++;
+      else if (t === FormApp.ItemType.CHECKBOX && it.asCheckboxItem().isRequired()) required++;
+      else if (t === FormApp.ItemType.SCALE && it.asScaleItem().isRequired()) required++;
+      else if (t === FormApp.ItemType.TEXT && it.asTextItem().isRequired()) required++;
+      else if (t === FormApp.ItemType.PARAGRAPH_TEXT && it.asParagraphTextItem().isRequired()) required++;
+      else if (t === FormApp.ItemType.LIST && it.asListItem().isRequired()) required++;
+    } catch (e) { /* 섹션·이미지 등 필수 개념 없는 아이템 */ }
+  });
+  check('실제 필수 문항 수 = 18 (안내문과 일치)', required === 18, '실측 ' + required + '개');
+
+  // ── B. 문12 — 홀드아웃 변수. 광고 카피 톤이 돌아오면 재현율까지 오염된다
+  const q12 = find('12.');
+  check('문12 존재', q12 !== null);
+  if (q12) {
+    check('문12 광고톤 제거("알아서 반응" 없음)',
+          q12.getTitle().indexOf('알아서 반응') === -1, q12.getTitle());
+    check('문12 "내 설정대로" 유지', q12.getTitle().indexOf('내 설정대로') !== -1);
+    check('문12 워치 보유 가정 도움말', q12.getHelpText().indexOf('이미 갖고 있다고 가정') !== -1);
+  }
+
+  // ── C. 문11-3 — 육아 편중이 H1을 '애 있는 집'으로 왜곡하던 지점
+  const q113 = find('11-3.');
+  check('문11-3 존재', q113 !== null);
+  if (q113) {
+    const ch = q113.asCheckboxItem().getChoices().map(function (c) { return c.getValue(); });
+    const kid = ch.filter(function (v) { return v.indexOf('아이') !== -1; }).length;
+    check('문11-3 보기 8개', ch.length === 8, '실측 ' + ch.length + '개');
+    check('문11-3 육아 보기 2개 이하 (실측 밤/새벽 7.6% vs 아기 1.7%)',
+          kid <= 2, '실측 ' + kid + '개');
+    check('문11-3 탈출구 "특별히 없다"', ch.indexOf('특별히 없다') !== -1);
+  }
+
+  // ── D. 문13-1 — 전원 대상 전환. 거부자 우려가 위협모델(Epic4)에 들어와야 한다
+  const q131 = find('13-1.');
+  check('문13-1 존재', q131 !== null);
+  if (q131) {
+    const ch = q131.asMultipleChoiceItem().getChoices().map(function (c) { return c.getValue(); });
+    check('문13-1 "이 기능에 관심 없음" 보기', ch.indexOf('이 기능에 관심 없음') !== -1);
+    check('문13-1 필수', q131.asMultipleChoiceItem().isRequired());
+  }
+
+  // ── E. 문5 — 기타 자유기입(손실 계측 가능해야 함)
+  const q5 = find('5.');
+  check('문5 존재', q5 !== null);
+  if (q5) check('문5 기타 자유기입 활성', q5.asMultipleChoiceItem().hasOtherOption());
+
+  // ── F. 문10 — 질문(강도) ↔ 척도(강도) 정합
+  const q10 = find('10.');
+  if (q10) check('문10 강도 어간("부담스러우셨나요")',
+                 q10.getTitle().indexOf('부담스러우셨나요') !== -1, q10.getTitle());
+
+  // ── G. 잔존 응답 — v2 파일럿이 남아 있으면 v3.1 구조와 섞인다
+  const n = form.getResponses().length;
+  check('잔존 응답 0건 (v2 파일럿 삭제 완료)', n === 0,
+        n + '건 남음 — dumpResponses()로 백업 후 삭제할 것');
+
+  Logger.log('=== verifyForm 결과: PASS ' + pass + ' / FAIL ' + fail + ' ===');
+  if (fail > 0) Logger.log('!! FAIL이 0이 될 때까지 배포 금지');
+  return { pass: pass, fail: fail };
+}
