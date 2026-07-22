@@ -4,7 +4,7 @@ baseline_commit: 2faf85f
 
 # Story 2.1: 가전 시뮬레이터 (BLE 주변장치)
 
-Status: review
+Status: done
 
 ## Story
 
