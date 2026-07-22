@@ -1,6 +1,10 @@
+---
+baseline_commit: e081729
+---
+
 # Story 2.3: 오프라인 강제 검증
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 
