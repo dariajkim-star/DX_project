@@ -1,6 +1,10 @@
+---
+baseline_commit: c77540ddbfaf5e5ea23edadc507c7597c30cf2f7
+---
+
 # Story 1.1: 홈 프로필 스키마 정의
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -34,40 +38,40 @@ so that 앱이나 서버가 아니라 **내가** 집 상태의 보관 주체가 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: 스키마 정의 모듈 작성** (AC: 1, 2, 3)
-  - [ ] `home_profile/schema.py` 신설 — 스키마를 **선언적 상수 + 검증 함수**로 정의
+- [x] **Task 1: 스키마 정의 모듈 작성** (AC: 1, 2, 3)
+  - [x] `home_profile/schema.py` 신설 — 스키마를 **선언적 상수 + 검증 함수**로 정의
         (JSON Schema dict 또는 dataclass. 외부 의존성 추가 금지 — 아래 '라이브러리 제약' 참조)
-  - [ ] 최상위 필드 — **근거 문서 유래**: `schema_version`(str, semver), `devices`[],
+  - [x] 최상위 필드 — **근거 문서 유래**: `schema_version`(str, semver), `devices`[],
         `settings`{}, `routines`[], `reserved_wellness`{}
-  - [ ] ⚠️ `profile_id`가 필요하다고 판단되면 **반드시 비식별 랜덤값**으로만 두고,
+  - [x] ⚠️ `profile_id`가 필요하다고 판단되면 **반드시 비식별 랜덤값**으로만 두고,
         `docs/PROFILE_SCHEMA.md`에 **"설계 판단(근거 문서 없음)"**으로 표기할 것.
         epics.md AC에 없는 필드다 — 넣는 것도 안 넣는 것도 가능하되, 넣었으면 출처를
         정직하게 '창작'으로 표기한다. 계정·기기 시리얼에서 유도한 값은 AC4 위반
-  - [ ] `devices[]`: `device_ref`(로컬 기기 식별자 — 시리얼·계정 아님), `device_type`, `capabilities`[]
-  - [ ] `routines[]`: `trigger`{type, params}, `actions`[{device_ref, setting_key, value}]
-  - [ ] `reserved_wellness`: **예약 선언만** — 값 스키마는 `{}`(빈 객체)로 고정하고
+  - [x] `devices[]`: `device_ref`(로컬 기기 식별자 — 시리얼·계정 아님), `device_type`, `capabilities`[]
+  - [x] `routines[]`: `trigger`{type, params}, `actions`[{device_ref, setting_key, value}]
+  - [x] `reserved_wellness`: **예약 선언만** — 값 스키마는 `{}`(빈 객체)로 고정하고
         읽기·해석·판단 코드를 일절 작성하지 않는다. 주석에 "NFR5: 진단·의료 판단 금지" 명시
-- [ ] **Task 2: 버전·마이그레이션 계약** (AC: 3)
-  - [ ] `SCHEMA_VERSION = "1.0.0"` 상수, 프로필 생성 시 자동 각인
-  - [ ] `is_supported(version)` — 지원 범위를 명시적으로 판정. **모르는 버전은 조용히 통과 금지**
-  - [ ] `MIGRATIONS` 레지스트리 뼈대(빈 dict + 등록 규약 주석) — 1.0.0은 마이그레이션 없음
-- [ ] **Task 3: 식별자 부재 검증** (AC: 4)
-  - [ ] `FORBIDDEN_FIELD_PATTERNS` — name/account/email/phone/user_id/birth 등 금지 패턴 상수
-  - [ ] `assert_no_identifiers(profile)` — 중첩 dict/list를 재귀 순회해 금지 키 검출 시 거부
-  - [ ] 스키마 자체를 이 함수에 통과시키는 테스트로 "설계상 부재"를 기계 증명
-- [ ] **Task 4: 검증 함수** (AC: 1, 2, 3)
-  - [ ] `validate_profile(profile) -> list[str]` — 위반 사유 목록 반환(빈 리스트 = 통과).
+- [x] **Task 2: 버전·마이그레이션 계약** (AC: 3)
+  - [x] `SCHEMA_VERSION = "1.0.0"` 상수, 프로필 생성 시 자동 각인
+  - [x] `is_supported(version)` — 지원 범위를 명시적으로 판정. **모르는 버전은 조용히 통과 금지**
+  - [x] `MIGRATIONS` 레지스트리 뼈대(빈 dict + 등록 규약 주석) — 1.0.0은 마이그레이션 없음
+- [x] **Task 3: 식별자 부재 검증** (AC: 4)
+  - [x] `FORBIDDEN_FIELD_PATTERNS` — name/account/email/phone/user_id/birth 등 금지 패턴 상수
+  - [x] `assert_no_identifiers(profile)` — 중첩 dict/list를 재귀 순회해 금지 키 검출 시 거부
+  - [x] 스키마 자체를 이 함수에 통과시키는 테스트로 "설계상 부재"를 기계 증명
+- [x] **Task 4: 검증 함수** (AC: 1, 2, 3)
+  - [x] `validate_profile(profile) -> list[str]` — 위반 사유 목록 반환(빈 리스트 = 통과).
         예외가 아니라 목록 반환: 여러 위반을 한 번에 보고해야 사람이 판단한다
-  - [ ] 미지 최상위 키는 **거부**한다(조용한 확장 금지 — NFR6 정합)
-- [ ] **Task 5: pytest 회귀 자산** (프로젝트 필수 규약)
-  - [ ] `tests/test_home_profile_schema.py` 신설
-  - [ ] 케이스: 유효 프로필 통과 / 식별자 필드 주입 시 거부 / 미지 버전 거부 /
+  - [x] 미지 최상위 키는 **거부**한다(조용한 확장 금지 — NFR6 정합)
+- [x] **Task 5: pytest 회귀 자산** (프로젝트 필수 규약)
+  - [x] `tests/test_home_profile_schema.py` 신설
+  - [x] 케이스: 유효 프로필 통과 / 식별자 필드 주입 시 거부 / 미지 버전 거부 /
         미지 최상위 키 거부 / `reserved_wellness`에 값 넣어도 해석 로직 부재 확인 /
         루틴 액션이 존재하지 않는 `device_ref` 참조 시 거부
-- [ ] **Task 6: 스키마 문서화** (AC: 4)
-  - [ ] `docs/PROFILE_SCHEMA.md` 신설 — 필드표 + **"수집하지 않는 것"** 절
+- [x] **Task 6: 스키마 문서화** (AC: 4)
+  - [x] `docs/PROFILE_SCHEMA.md` 신설 — 필드표 + **"수집하지 않는 것"** 절
         (CX_DEFINITION.md §4 '수집하지 않은 것' 표기 방식을 그대로 승계)
-  - [ ] NFR5 예약 필드의 의미와 금지 범위를 문서에 못박음
+  - [x] NFR5 예약 필드의 의미와 금지 범위를 문서에 못박음
 
 ## Dev Notes
 
@@ -196,8 +200,68 @@ DX_project/
 
 ### Agent Model Used
 
+claude-fable-5 (Claude Fable 5)
+
 ### Debug Log References
+
+- RED: `pytest tests/test_home_profile_schema.py` → 23 errors (모듈 부재) — 테스트 정당성 확인
+- GREEN: 동일 명령 → 23 passed
+- 회귀: `pytest tests/ -q` → **78 passed** (기준선 55 → +23, 회귀 0건)
 
 ### Completion Notes List
 
+**구현 요약** — 표준 라이브러리만으로 스키마를 순수 dict 계약으로 정의했다.
+외부 의존성 0건 추가(`requirements.txt` 무변경) — 캐리어 중립(NFR3)이 코드 레벨에서
+깨지지 않도록 pydantic·jsonschema를 쓰지 않았다.
+
+**AC 충족 근거**
+- **AC1**: `TOP_LEVEL_KEYS`/`REQUIRED_TOP_LEVEL_KEYS` 상수 + `validate_profile()`.
+  기기 식별자(`device_ref`)·설정 K/V(`settings`)·루틴(`trigger`/`actions`)·
+  `schema_version` 전부 포함. 미등록 기기를 참조하는 루틴과 `device_ref` 중복도 거부
+- **AC2**: `reserved_wellness`는 선언되어 있으나 **빈 객체만 허용**(값을 담으면 거부).
+  웰니스 해석 함수 5종(`wellness_score`·`interpret_wellness`·`diagnose`·
+  `assess_health`·`evaluate_wellness`) 부재를 테스트가 고정
+- **AC3**: `SCHEMA_VERSION="1.0.0"`, `is_supported()`가 형식 위반·미지 버전을 전부
+  `False`로 판정(조용한 통과 없음), `MIGRATIONS` 레지스트리 + 등록 규약 주석
+- **AC4**: `assert_no_identifiers()`가 중첩 dict/list를 재귀 순회, 부분 일치·대소문자
+  무시로 검출. `validate_profile()`이 내부에서 호출하므로 별도 호출을 잊어도 막힌다.
+  **스키마 자신이 이 검사를 통과함**을 테스트로 기계 증명(`test_schema_itself_has_no_identifier_fields`).
+  문서화는 `docs/PROFILE_SCHEMA.md` §2 "수집하지 않는 것"
+
+**스토리 지시와 다르게 한 것 (정직 표기)**
+- 상수명을 `FORBIDDEN_FIELD_PATTERNS` → **`FORBIDDEN_KEY_FRAGMENTS`** 로 변경.
+  정규식 패턴이 아니라 부분 문자열 조각을 담기 때문에 이름이 내용을 오도했다
+- `profile_id` **미채택**. 스토리는 "넣으면 창작으로 표기하라"고 허용했으나,
+  AC에 없고 잘못 만들면 계정 식별자로 퇴화할 위험이 있어 넣지 않았다.
+  판단 근거는 `docs/PROFILE_SCHEMA.md` §6에 기록
+
+**후속 스토리로 넘긴 것 (범위 준수)**
+- 청크 전송 프로토콜 — 구조만 청크 가능하게 두고 구현은 Story 1.2·Epic 2
+- 직렬화 포맷 확정(JSON vs CBOR) — 크기 예산 측정(Story 1.2) 후 결정
+- 이사 시 '보류(pending)' 표현 — Story 3.2 범위이며 지금 창작하지 않았다
+
+**미해결 질문 (사람 판단 필요)**
+1. `FORBIDDEN_KEY_FRAGMENTS`에 `"name"`이 있어 `device_name` 같은 **사용자 지정
+   기기 별칭**("안방 에어컨")도 차단된다. 별칭은 UX상 필요할 수 있으나 준식별자이기도
+   하다 — 허용할지, 허용한다면 어떤 이름으로 예외를 둘지는 설계 결정이다
+2. `"owner"` 차단이 `device_owner_room` 같은 무해한 키까지 막을 수 있다.
+   현재는 과잉 차단을 택했다("우회할 이름을 찾지 말고 필요성을 되물어라" 규약)
+
 ### File List
+
+**신규**
+- `home_profile/__init__.py`
+- `home_profile/schema.py`
+- `tests/test_home_profile_schema.py`
+- `docs/PROFILE_SCHEMA.md`
+
+**수정**
+- `docs/implementation-artifacts/1-1-home-profile-schema.md` (frontmatter·체크박스·Dev Agent Record)
+
+기존 파일 수정 0건 — `dx_pipeline_v2.2/`·`synthetic_panel.py`·`requirements.txt` 무변경.
+
+## Change Log
+
+| 날짜 | 변경 |
+|---|---|
+| 2026-07-22 | Story 1.1 구현 — 홈 프로필 스키마 v1.0.0 + 회귀 테스트 23건 + 스키마 명세 문서. 전체 테스트 78 passed |
