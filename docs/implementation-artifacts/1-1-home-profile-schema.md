@@ -4,7 +4,7 @@ baseline_commit: c77540ddbfaf5e5ea23edadc507c7597c30cf2f7
 
 # Story 1.1: 홈 프로필 스키마 정의
 
-Status: review
+Status: changes-requested
 
 ## Story
 
@@ -265,3 +265,51 @@ claude-fable-5 (Claude Fable 5)
 | 날짜 | 변경 |
 |---|---|
 | 2026-07-22 | Story 1.1 구현 — 홈 프로필 스키마 v1.0.0 + 회귀 테스트 23건 + 스키마 명세 문서. 전체 테스트 78 passed |
+| 2026-07-22 | **Code Review Crew 평결: changes-requested.** AC2·AC3·AC4 미충족 재판정. PROFILE_SCHEMA.md §2·§4의 거짓 보증 문구 철회·정정 |
+
+## Senior Developer Review (AI)
+
+**리뷰**: Code Review Crew (Vex 보안 / Grumbal 적대 / Boundary 엣지 / Yui 장인 / Dana 현실) · 2026-07-22
+**결과**: **Changes Requested** — AC1만 충족. AC2·AC3·AC4 미충족.
+
+### 재판정 근거 (전부 실행으로 확인)
+
+- **AC4 미충족** — `assert_no_identifiers()`는 **키 이름만** 검사한다. 값은 한 번도 읽지 않는다.
+  `device_ref="hong.gildong@gmail.com"`, `device_type="서울 강남구 123-4 홍길동 침실"` → `[]`.
+  금지어가 **영어 12개뿐**이라 `이름`·`전화번호` 통과, 호모글리프(`аccount_id`, 키릴 а) 통과,
+  `ssid`·`lat`·`lon`(가구 식별자+위치) 통과. "기계 증명"은 `new_profile()` 즉 **빈 컨테이너 4개**를
+  검사한 것이었다 — 스키마에 대한 증명이 아니라 `{}`에 대한 증명.
+- **AC2 미충족** — `reserved_wellness`는 잠갔으나 `settings`가 임의 키를 받는다.
+  `{"sleep_score":82,"body_fat_pct":18.2,"bp_systolic":139}` → `[]`. 게다가
+  `reserved_wellness`는 필수 키가 아니라 **키를 빼면 검사가 건너뛰어진다**.
+  '해석 함수 부재' 테스트는 구현자가 사후에 고른 이름 5개에 대한 `hasattr`라 실패 불가.
+- **AC3 미충족** — `MIGRATIONS`를 읽는 코드가 0줄. 더구나 `is_supported()`가 구버전을
+  **거부**하므로 옛 프로필은 마이그레이션되기 전에 차단된다. 마이그레이션을 쓰려면
+  `is_supported`부터 뜯어야 한다 = 그 결정이 아직 안 내려졌다.
+- **NFR6 부분 충족** — 미지 키 거부는 **최상위에서만** 작동. 중첩 레벨(devices[]·
+  settings[ref]·routines[]·trigger·actions[]) 전부 임의 키 자유. 위 우회들의 실제 통로.
+
+### 검증 게이트 자체의 결함
+
+- **테스트 23개가 검증 로직 0줄짜리 스텁을 구별하지 못한다** (직접 재현: 23 passed).
+  단언 대부분이 `assert any(<문자열> in e for e in errs)` — 검증이 일어났는지가 아니라
+  그 단어가 언급됐는지만 본다. `test_profile_is_chunkable...`은 `json` 모듈을 테스트하며
+  `schema.py`를 호출조차 하지 않는다.
+- **`validate_profile()`이 계약을 어기고 예외를 던진다**: `device_ref`가 list/dict면
+  `TypeError: unhashable`, 깊이 1000 중첩이면 `RecursionError`, 순환 참조도 크래시.
+  docstring이 "예외를 던지지 않는다"고 약속해 호출자가 방어하지 않는다.
+  **이 크래시들은 `assert_no_identifiers()`(함수 마지막 줄)보다 먼저 터진다** — 즉
+  try/except를 쓰는 호출자에서는 PII 검사가 아예 실행되지 않는다.
+- **`null`이 검증을 통째로 끈다**: `devices:null` → 모든 구조·참조 검사 스킵 → `[]`.
+  `device_ref:null`이면 중복 검사와 유령 참조 검사가 동시에 꺼진다.
+- **직렬화 불가 프로필이 통과한다**: `set` 값 → `validate_profile()==[]`,
+  `json.dumps()` → `TypeError`. Story 1.2가 정면으로 밟을 지점.
+
+### 구조 (Yui)
+
+- `assert_no_identifiers`는 이름이 거짓 — `assert_*`인데 raise하지 않고, 성공 시 falsy를
+  반환한다. 맨 문장으로 쓰면 조용한 no-op. → `find_identifier_violations()`로 개명
+- `validate_profile()` 116줄 7단 중첩 → 헬퍼 4개로 분해 (테스트가 동작을 고정한 지금이 최저비용)
+- `is_supported()`의 semver 파싱 3줄은 어떤 입력에서도 답을 바꾸지 못함(inert)
+- `__init__.py`가 가변 전역 `MIGRATIONS`를 내보내고 `SUPPORTED_VERSIONS`는 빼놓음.
+  테스트가 `import home_profile`을 한 번도 실행하지 않아 export가 썩어도 CI 초록불
