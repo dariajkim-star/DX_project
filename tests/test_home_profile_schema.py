@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
-"""홈 프로필 스키마 회귀 테스트 (Story 1.1).
+"""홈 프로필 스키마 회귀 테스트 (Story 1.1, 리뷰 반영 v2).
 
-고정하는 것:
-  1. 필수 필드 구성 — 기기·설정·루틴·스키마 버전 (AC1)
-  2. 웰니스 예약 — 값을 넣어도 해석 로직이 없다 (AC2, NFR5 의료 규제)
-  3. 버전 계약 — 모르는 버전은 조용히 통과하지 않는다 (AC3)
-  4. 식별자 부재 — 이름·계정·연락처 필드는 설계상 존재할 수 없다 (AC4, FR7 선행)
-
-테스트 픽스처는 tests/test_panel.py의 _write_bundle 패턴을 따른다:
-유효한 최소 프로필을 만드는 헬퍼를 두고 케이스마다 변조한다.
+v1 테스트의 결함(2026-07-22 Code Review Crew 적발): 단언 대부분이
+'단어가 에러 메시지에 언급됐는지'만 봐서 **검증 로직 0줄짜리 스텁이 23/23 통과**했다.
+v2 원칙:
+  - 유효 프로필은 정확히 0건, 단일 결함 프로필은 **정확히 그 결함만** 보고돼야 한다
+    (표류 방지: 위반 수까지 고정)
+  - 계약 고정: validate_profile은 어떤 입력에도 **예외를 던지지 않는다**
+    (unhashable·순환·깊은 중첩 전부 위반 목록으로)
+  - 우회 케이스를 직접 재현: 값 PII·한국어 키·호모글리프·중첩 미지 키·null 스킵
 """
 import importlib.util
+import json
+import math
 from pathlib import Path
 
 import pytest
@@ -46,163 +48,295 @@ def _make_profile(hp):
     }
 
 
-# ---------- AC1: 필수 필드 구성 ----------
-def test_valid_profile_passes(hp):
-    assert hp.validate_profile(_make_profile(hp)) == []
+def _errs(hp, p):
+    out = hp.validate_profile(p)
+    assert isinstance(out, list)
+    return out
 
 
-def test_required_top_level_fields(hp):
-    """최상위 필수 키가 빠지면 각각 위반으로 보고된다"""
-    for key in ("schema_version", "devices", "settings", "routines"):
+# ---------- 계약: 유효 프로필 = 정확히 0건 ----------
+def test_valid_profile_exactly_zero_violations(hp):
+    assert _errs(hp, _make_profile(hp)) == []
+
+
+def test_new_profile_is_valid_and_fresh(hp):
+    a, b = hp.new_profile(), hp.new_profile()
+    assert _errs(hp, a) == []
+    a["devices"].append({"device_ref": "x1", "device_type": "light"})
+    assert b["devices"] == []  # 컨테이너 공유 금지
+
+
+# ---------- 계약: 어떤 입력에도 예외 금지 ----------
+def test_never_raises_on_unhashable_ref(hp):
+    """v1 결함: device_ref가 list/dict면 TypeError로 크래시했다"""
+    for bad in (["a"], {"a": 1}):
+        p = _make_profile(hp)
+        p["devices"][0]["device_ref"] = bad
+        errs = _errs(hp, p)  # 예외가 아니라 목록
+        assert errs, f"{type(bad).__name__} ref가 무보고 통과"
+
+
+def test_never_raises_on_deep_nesting(hp):
+    """v1 결함: 깊이 1000 중첩(~10KB)이 RecursionError로 검증기를 죽였다"""
+    d = 1200
+    payload = json.loads('{"n":' * d + '{}' + '}' * d)
+    p = _make_profile(hp)
+    p["settings"]["d1"] = payload
+    errs = _errs(hp, p)
+    assert any("깊이" in e for e in errs)
+
+
+def test_never_raises_on_circular_reference(hp):
+    """v1 결함: 순환 참조가 무조건 크래시했다"""
+    p = _make_profile(hp)
+    p["settings"]["d1"] = {}
+    p["settings"]["d1"]["loop"] = p
+    errs = _errs(hp, p)
+    assert any("순환" in e for e in errs)
+
+
+# ---------- v1 결함: null이 검증을 통째로 껐다 ----------
+def test_null_section_is_a_violation_not_a_skip(hp):
+    """devices:null이면 구조·참조 검사 전체가 스킵돼 유령 참조가 통과했다"""
+    p = _make_profile(hp)
+    p["devices"] = None
+    errs = _errs(hp, p)
+    assert any("devices" in e for e in errs)
+    # null 뒤에 숨은 유령 참조도 함께 보고돼야 한다 — settings의 d1/d2가 미확인
+    for key in ("settings", "routines"):
+        p2 = _make_profile(hp)
+        p2[key] = None
+        assert any(key in e for e in _errs(hp, p2)), f"{key}:null 무보고 통과"
+
+
+def test_null_device_ref_is_a_violation(hp):
+    """v1 결함: ref:null이 중복 검사·유령 참조 검사를 동시에 껐다"""
+    p = _make_profile(hp)
+    p["devices"][0]["device_ref"] = None
+    assert any("device_ref" in e for e in _errs(hp, p))
+
+
+def test_null_trigger_and_empty_actions_rejected(hp):
+    p = _make_profile(hp)
+    p["routines"][0]["trigger"] = None
+    assert any("trigger" in e for e in _errs(hp, p))
+    p2 = _make_profile(hp)
+    p2["routines"][0]["actions"] = []
+    assert any("actions" in e for e in _errs(hp, p2))
+
+
+# ---------- AC1: 필수 필드·참조 정합 ----------
+def test_each_missing_required_key_reported_exactly_once(hp):
+    for key in ("schema_version", "devices", "settings", "routines",
+                "reserved_wellness"):
         p = _make_profile(hp)
         del p[key]
-        errs = hp.validate_profile(p)
-        assert any(key in e for e in errs), f"{key} 누락이 보고되지 않음: {errs}"
+        errs = _errs(hp, p)
+        hits = [e for e in errs if key in e and "누락" in e]
+        assert len(hits) == 1, f"{key}: {errs}"
 
 
-def test_device_requires_ref_and_type(hp):
+def test_ghost_reference_reported(hp):
     p = _make_profile(hp)
-    del p["devices"][0]["device_ref"]
-    assert any("device_ref" in e for e in hp.validate_profile(p))
+    p["routines"][0]["actions"][0]["device_ref"] = "ghost9"
+    errs = _errs(hp, p)
+    assert len([e for e in errs if "ghost9" in e]) == 1
 
 
-def test_routine_requires_trigger_and_actions(hp):
-    p = _make_profile(hp)
-    del p["routines"][0]["trigger"]
-    assert any("trigger" in e for e in hp.validate_profile(p))
-
-
-def test_routine_action_must_reference_known_device(hp):
-    """존재하지 않는 기기를 가리키는 루틴은 조용히 통과하면 안 된다"""
-    p = _make_profile(hp)
-    p["routines"][0]["actions"][0]["device_ref"] = "ghost"
-    errs = hp.validate_profile(p)
-    assert any("ghost" in e for e in errs), errs
-
-
-def test_duplicate_device_ref_rejected(hp):
-    """device_ref는 프로필 내 매칭 키 — 중복이면 복원(3.1)이 비결정적이 된다"""
+def test_duplicate_device_ref_reported(hp):
     p = _make_profile(hp)
     p["devices"][1]["device_ref"] = "d1"
-    assert any("d1" in e for e in hp.validate_profile(p))
+    errs = _errs(hp, p)
+    assert any("d1" in e and "중복" in e for e in errs)
 
 
-def test_unknown_top_level_key_rejected(hp):
-    """조용한 확장 금지 (NFR6) — 미지 키는 거부"""
+def test_settings_ghost_device_reported(hp):
     p = _make_profile(hp)
-    p["cloud_account"] = {"id": "x"}
-    assert any("cloud_account" in e for e in hp.validate_profile(p))
+    p["settings"]["ghost7"] = {"power": "on"}
+    assert any("ghost7" in e for e in _errs(hp, p))
 
 
-# ---------- AC2: 웰니스 예약 (NFR5) ----------
-def test_reserved_wellness_is_declared(hp):
-    """예약 필드는 스키마에 선언되어 있다"""
-    assert "reserved_wellness" in hp.TOP_LEVEL_KEYS
+def test_numeric_device_ref_rejected(hp):
+    """숫자 ref는 JSON 객체 키(항상 문자열)에서 영구 참조 불가 — 토큰 형식 강제"""
+    p = _make_profile(hp)
+    p["devices"][0]["device_ref"] = 1
+    p["settings"] = {"d2": {"power": "off"}}
+    assert any("device_ref" in e for e in _errs(hp, p))
 
 
-def test_reserved_wellness_must_stay_empty(hp):
-    """값을 넣으면 거부한다 — '일단 파싱만 해두자'가 곧 규제 위반의 시작"""
+# ---------- NFR6: 미지 키 거부 — 이제 전 레벨 ----------
+def test_unknown_key_rejected_at_every_level(hp):
+    cases = [
+        lambda p: p.update({"cloud_account": 1}),
+        lambda p: p["devices"][0].update({"ssid": "KimFamily_5G"}),
+        lambda p: p["routines"][0].update({"extra": 1}),
+        lambda p: p["routines"][0]["trigger"].update({"geo": [37.49, 127.03]}),
+        lambda p: p["routines"][0]["actions"][0].update({"lat": 37.49}),
+    ]
+    for i, mutate in enumerate(cases):
+        p = _make_profile(hp)
+        mutate(p)
+        errs = _errs(hp, p)
+        assert any("미지" in e for e in errs), f"case{i}: {errs}"
+
+
+def test_exactly_one_violation_for_single_unknown_key(hp):
+    """스텁 방지: 위반 '수'까지 고정한다"""
+    p = _make_profile(hp)
+    p["surprise"] = 1
+    assert len(_errs(hp, p)) == 1
+
+
+# ---------- AC4/FR7: 식별자 차단 — 키와 **값** ----------
+def test_pii_in_values_detected(hp):
+    """v1 결함: 검사가 키만 봐서 값 PII가 전부 통과했다"""
+    cases = [
+        ("email값", lambda p: p["settings"]["d1"].update(
+            {"memo": "hong.gildong@gmail.com"})),
+        ("전화값", lambda p: p["settings"]["d1"].update({"memo": "010-1234-5678"})),
+        ("주민번호값", lambda p: p["settings"]["d1"].update(
+            {"memo": "900101-1234567"})),
+        ("한국어PII값", lambda p: p["routines"][0]["trigger"]["params"].update(
+            {"at": "홍길동 이름으로 예약"})),
+    ]
+    for label, mutate in cases:
+        p = _make_profile(hp)
+        mutate(p)
+        errs = _errs(hp, p)
+        assert errs, f"{label} 무보고 통과"
+
+
+def test_pii_as_settings_key_rejected(hp):
+    """이메일이 dict 키로 들어와도 잡힌다 (v1: 'gmail'≠'email'이라 통과)"""
+    p = _make_profile(hp)
+    p["devices"].append({"device_ref": "hong.gildong@gmail.com",
+                         "device_type": "light"})
+    assert _errs(hp, p)  # 토큰 형식 위반으로 거부
+
+
+def test_korean_identifier_keys_rejected(hp):
+    """v1 결함: 금지어가 영어뿐이라 '이름'·'전화번호' 키가 통과했다"""
+    for bad in ("이름", "전화번호", "주소록"):
+        p = _make_profile(hp)
+        p["settings"]["d1"][bad] = "x"
+        assert _errs(hp, p), f"{bad} 무보고 통과"
+
+
+def test_homoglyph_key_rejected(hp):
+    """v1 결함: 키릴 а가 섞인 'аccount_id'가 통과했다 — 비ASCII 키 자체를 거부"""
+    p = _make_profile(hp)
+    p["settings"]["d1"]["аccount_id"] = "x"
+    assert _errs(hp, p)
+
+
+def test_english_identifier_keys_still_rejected(hp):
+    for bad in ("user_name", "account_id", "email", "phone", "birth_date"):
+        p = _make_profile(hp)
+        p["settings"]["d1"][bad] = "x"
+        assert _errs(hp, p), f"{bad} 무보고 통과"
+
+
+def test_location_and_hardware_ids_rejected(hp):
+    """ssid+좌표는 이메일보다 강한 가구 식별자다 (Vex)"""
+    for bad in ("ssid", "mac", "serial", "imei", "lat", "lon", "latitude"):
+        p = _make_profile(hp)
+        p["settings"]["d1"][bad] = "v"
+        assert _errs(hp, p), f"{bad} 무보고 통과"
+
+
+def test_find_identifier_violations_reports_path(hp):
+    p = _make_profile(hp)
+    p["settings"]["d1"]["email"] = "a@b.c"
+    found = hp.find_identifier_violations(p)
+    assert len(found) >= 1
+    assert any("email" in f for f in found)
+
+
+def test_identifier_scan_runs_even_when_structure_broken(hp):
+    """v1 결함: 구조 검사 크래시가 PII 스캔을 선점했다 — 이제 둘 다 보고된다"""
+    p = _make_profile(hp)
+    p["devices"][0]["device_ref"] = ["unhashable"]
+    p["settings"]["d1"]["email"] = "a@b.c"
+    errs = _errs(hp, p)
+    assert any("email" in e for e in errs)
+
+
+# ---------- AC2/NFR5: 웰니스 봉쇄 — 앞문과 옆문 ----------
+def test_reserved_wellness_must_exist_and_stay_empty(hp):
     p = _make_profile(hp)
     p["reserved_wellness"] = {"sleep_score": 82}
-    errs = hp.validate_profile(p)
-    assert any("reserved_wellness" in e for e in errs), errs
+    assert any("reserved_wellness" in e for e in _errs(hp, p))
+    p2 = _make_profile(hp)
+    del p2["reserved_wellness"]  # v1 결함: 키를 빼면 검사가 스킵됐다
+    assert any("reserved_wellness" in e for e in _errs(hp, p2))
 
 
-def test_no_wellness_interpretation_functions(hp):
-    """모듈에 웰니스를 해석·판단하는 공개 함수가 존재하지 않는다 (NFR5)"""
-    banned = ("wellness_score", "interpret_wellness", "diagnose",
-              "assess_health", "evaluate_wellness")
-    for name in banned:
-        assert not hasattr(hp, name), f"NFR5 위반: {name} 존재"
+def test_wellness_data_in_settings_rejected(hp):
+    """v1 결함: 옆문 — settings에 웰니스 데이터가 자유 투입됐다"""
+    for bad in ("sleep_score", "hrv", "body_fat_pct", "bp_systolic",
+                "heart_rate", "spo2"):
+        p = _make_profile(hp)
+        p["settings"]["d1"][bad] = 82
+        assert _errs(hp, p), f"{bad} 무보고 통과"
 
 
-# ---------- AC3: 버전·마이그레이션 ----------
-def test_schema_version_is_semver(hp):
-    parts = hp.SCHEMA_VERSION.split(".")
-    assert len(parts) == 3 and all(x.isdigit() for x in parts)
-
-
-def test_new_profile_stamps_version(hp):
-    assert hp.new_profile()["schema_version"] == hp.SCHEMA_VERSION
-
-
-def test_unknown_version_rejected(hp):
-    """모르는 버전은 조용히 통과 금지"""
+# ---------- AC3: 버전 ----------
+def test_unknown_and_malformed_versions_rejected(hp):
     assert hp.is_supported(hp.SCHEMA_VERSION) is True
-    assert hp.is_supported("99.0.0") is False
+    for bad in ("99.0.0", "1.0", "v1.0.0", "", "abc", None, 1.0):
+        assert hp.is_supported(bad) is False, bad
     p = _make_profile(hp)
     p["schema_version"] = "99.0.0"
-    assert any("99.0.0" in e for e in hp.validate_profile(p))
+    errs = _errs(hp, p)
+    assert len([e for e in errs if "99.0.0" in e]) == 1
 
 
-def test_malformed_version_rejected(hp):
-    for bad in ("1.0", "v1.0.0", "", "abc"):
-        assert hp.is_supported(bad) is False
-
-
-def test_migrations_registry_exists(hp):
-    """마이그레이션 경로가 열려 있다 — 1.0.0은 등록분 없음"""
-    assert isinstance(hp.MIGRATIONS, dict)
-    assert hp.SCHEMA_VERSION not in hp.MIGRATIONS
-
-
-# ---------- AC4: 식별자 부재 증명 (FR7 선행) ----------
-def test_schema_itself_has_no_identifier_fields(hp):
-    """스키마 자신을 통과시켜 '설계상 부재'를 기계 증명한다"""
-    assert hp.assert_no_identifiers(hp.new_profile()) == []
-
-
-def test_identifier_injection_detected(hp):
-    for bad_key in ("name", "user_name", "account_id", "email",
-                    "phone", "birth_date", "user_id"):
-        p = _make_profile(hp)
-        p["settings"]["d1"][bad_key] = "홍길동"
-        found = hp.assert_no_identifiers(p)
-        assert found, f"{bad_key} 미검출"
-        assert any(bad_key in f for f in found)
-
-
-def test_identifier_detected_in_nested_list(hp):
-    """중첩 리스트 안에 숨겨도 재귀 순회로 잡는다"""
+# ---------- 직렬화 가능성 (Story 1.2 계약) ----------
+def test_unserializable_values_rejected(hp):
+    """v1 결함: set 값이 검증을 통과하고 json.dumps에서 터졌다"""
     p = _make_profile(hp)
-    p["routines"][0]["actions"][0]["owner_email"] = "a@b.c"
-    assert hp.assert_no_identifiers(p)
+    p["settings"]["d1"]["target_temp"] = {1, 2}
+    assert _errs(hp, p)
 
 
-def test_validate_profile_rejects_identifiers(hp):
-    """검증 함수가 식별자 검사를 포함한다 — 별도로 부르는 걸 잊어도 막힌다"""
+def test_nonfinite_float_rejected(hp):
     p = _make_profile(hp)
-    p["devices"][0]["account_id"] = "acc-1"
-    assert any("account_id" in e for e in hp.validate_profile(p))
+    p["settings"]["d1"]["target_temp"] = math.nan
+    assert _errs(hp, p)
 
 
-def test_identifier_check_is_case_insensitive(hp):
+def test_valid_profile_roundtrips_json(hp):
     p = _make_profile(hp)
-    p["settings"]["d1"]["Email"] = "a@b.c"
-    assert hp.assert_no_identifiers(p)
+    assert json.loads(json.dumps(p, ensure_ascii=False)) == p
+    assert _errs(hp, json.loads(json.dumps(p, ensure_ascii=False))) == []
 
 
-# ---------- 구조 계약 (BLE 20바이트 MTU 대응) ----------
-def test_profile_is_chunkable_by_top_level_lists(hp):
-    """devices/routines가 각각 독립 직렬화 가능해야 한다 (20바이트 MTU → 청크 전송).
-    프로토콜 구현은 Story 1.2·Epic 2 범위 — 여기서는 구조만 고정한다."""
-    import json
-    p = _make_profile(hp)
-    for d in p["devices"]:
-        json.loads(json.dumps(d, ensure_ascii=False))
-    for r in p["routines"]:
-        json.loads(json.dumps(r, ensure_ascii=False))
-
-
-def test_validate_profile_returns_all_violations(hp):
-    """여러 위반을 한 번에 보고한다 — 사람이 판단하려면 목록이어야 한다"""
+# ---------- 다중 위반 전수 보고 ----------
+def test_multiple_violations_all_reported(hp):
     p = _make_profile(hp)
     del p["devices"]
     p["schema_version"] = "99.0.0"
     p["surprise"] = 1
-    assert len(hp.validate_profile(p)) >= 3
+    errs = _errs(hp, p)
+    assert any("devices" in e for e in errs)
+    assert any("99.0.0" in e for e in errs)
+    assert any("surprise" in e for e in errs)
 
 
 def test_non_dict_profile_rejected(hp):
     for bad in (None, [], "profile", 42):
-        assert hp.validate_profile(bad)
+        assert _errs(hp, bad)
+
+
+# ---------- 패키지 표면 (v1: import home_profile이 0회 실행됐다) ----------
+def test_package_imports_and_all_is_consistent():
+    import sys
+    sys.path.insert(0, str(ROOT))
+    try:
+        import home_profile
+        for nm in home_profile.__all__:
+            assert hasattr(home_profile, nm), nm
+        assert "MIGRATIONS" not in home_profile.__all__  # 죽은 상수는 표면에서 제거됨
+        assert "SUPPORTED_VERSIONS" in home_profile.__all__
+    finally:
+        sys.path.remove(str(ROOT))

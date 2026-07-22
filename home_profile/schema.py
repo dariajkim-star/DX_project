@@ -1,42 +1,45 @@
 # -*- coding: utf-8 -*-
-"""홈 프로필 스키마 (v1.0.0) — Story 1.1.
+"""홈 프로필 스키마 (v1.0.0) — Story 1.1, 리뷰 반영 v2.
 
 설계 근거: docs/planning-artifacts/epics.md#Story 1.1
-       docs/implementation-artifacts/1-1-home-profile-schema.md
+       docs/implementation-artifacts/1-1-home-profile-schema.md (리뷰 평결 포함)
 
-이 스키마는 "집의 상태를 클라우드 계정이 아니라 사용자 몸에 귀속시킨다"는
-처방(CX_DEFINITION §2.3)의 자료구조다.
+2026-07-22 Code Review Crew 평결로 재작성됨. v1의 구멍:
+키만 검사(값 PII 통과)·영어 금지어뿐·null이 검증 스킵·unhashable/재귀 크래시가
+PII 스캔 선점·중첩 미지 키 자유·웰니스 옆문(settings). 전부 아래로 봉인.
 
 불변 원칙:
-  1. 식별자 없음 — 이름·계정·연락처가 **설계상 존재할 수 없다**(FR7 선행).
-     "안 넣었다"가 아니라 assert_no_identifiers()로 기계 증명한다.
-  2. 웰니스는 예약만 — reserved_wellness는 선언되어 있으나 값을 허용하지 않고,
-     해석·판단하는 코드가 이 모듈에 존재하지 않는다(NFR5, 의료 규제).
-  3. 조용한 통과 금지 — 미지 버전·미지 최상위 키는 거부한다(NFR6).
-  4. 포맷 중립 — 순수 dict로 정의한다. JSON이 기본 표현이지만 크기 예산 측정
-     (Story 1.2) 후 CBOR/MessagePack으로 바꿔도 스키마는 그대로여야 한다.
+  1. 식별자 차단은 **구조로** 한다 — 사람이 자유 문자열을 쓸 자리를 없앤다.
+     스키마 통제 키는 전부 화이트리스트, device_ref·setting_key는 ASCII 토큰 형식,
+     자유 텍스트가 남는 값에는 PII 패턴 스캔(이메일·전화·주민번호·한국어 조각).
+     이것은 방어선의 총합이지 수학적 증명이 아니다 — 문서에도 그렇게만 적는다.
+  2. 웰니스는 예약만 — reserved_wellness는 **필수이며 항상 빈 객체**(키를 빼는
+     우회 봉쇄). settings의 웰니스성 키(sleep·hrv·bp_ 등)도 거부한다(옆문 봉쇄).
+     해석·판단 코드는 이 모듈에 존재하지 않는다(NFR5, 의료 규제).
+  3. 조용한 통과 금지 — 미지 키는 **모든 레벨**에서 거부. null은 스킵이 아니라
+     위반. 모르는 버전 거부. 검증기 내부 오류도 통과가 아니라 거부(fail-closed).
+  4. validate_profile()은 **어떤 입력에도 예외를 던지지 않는다.** 이 계약은
+     장식이 아니다 — 호출자가 try/except로 감싸는 순간 PII 스캔이 통째로
+     증발하는 사고(v1)를 막는 방어선이다.
+  5. 포맷 중립 — 순수 dict. 표준 라이브러리만 사용(캐리어 중립 NFR3:
+     이 표현은 워치급 Monkey C로 이식된다).
 
-표준 라이브러리만 사용한다. pydantic·jsonschema를 쓰지 않는 이유:
-이 표현은 최종적으로 워치급 환경(Monkey C)으로 이식된다 — 스키마 정의가
-Python 전용 라이브러리에 종속되면 캐리어 중립(NFR3)이 코드 레벨에서 깨진다.
+버전·마이그레이션: SUPPORTED_VERSIONS 밖은 전부 거부한다. 구버전 프로필을
+"받아서 마이그레이션"할지 "거부"할지는 **미결정 설계 사항**이다(리뷰 F5) —
+v1의 MIGRATIONS 빈 레지스트리는 아무도 읽지 않는 장식이라 삭제했다.
+결정이 내려지면 is_supported의 허용 범위와 변환 경로를 그때 함께 설계한다.
 
-전송 제약 (2026-07-22 조사, Story 1.2·Epic 2가 상속):
+전송 제약 (Story 1.2·Epic 2가 상속):
   Connect IQ Application.Storage 총 ~128KB / 키당 ~8KB
   Connect IQ BLE 특성 ~20바이트 MTU, long write 미지원
-  → 프로필 전체를 한 키·한 write로 보낼 수 없다. devices[]·routines[] 원소가
-    각각 독립 직렬화되도록 평평하게 유지한 이유다. 청크 프로토콜 자체는
-    이 스토리 범위가 아니다.
+  → devices[]·routines[] 원소가 각각 독립 직렬화되는 평평한 구조 유지.
 """
+import math
+import re
+import unicodedata
 
 SCHEMA_VERSION = "1.0.0"
-
-# 지원 버전 집합. 새 버전을 추가할 때 MIGRATIONS도 함께 갱신한다.
 SUPPORTED_VERSIONS = frozenset({"1.0.0"})
-
-# 마이그레이션 레지스트리: {"출발버전": callable(profile) -> profile}
-# 등록 규약 — 함수는 프로필 dict를 받아 다음 버전 dict를 반환하고, 부작용이 없어야
-# 한다. 1.0.0은 최초 버전이라 등록분이 없다(빈 dict가 정상 상태).
-MIGRATIONS = {}
 
 TOP_LEVEL_KEYS = (
     "schema_version",
@@ -45,38 +48,59 @@ TOP_LEVEL_KEYS = (
     "routines",
     "reserved_wellness",
 )
-REQUIRED_TOP_LEVEL_KEYS = (
-    "schema_version",
-    "devices",
-    "settings",
-    "routines",
-)
+# v2: reserved_wellness도 필수 — 키를 빼면 NFR5 검사가 스킵되던 우회(리뷰 F4) 봉쇄
+REQUIRED_TOP_LEVEL_KEYS = TOP_LEVEL_KEYS
 
-DEVICE_REQUIRED_KEYS = ("device_ref", "device_type")
-ROUTINE_REQUIRED_KEYS = ("trigger", "actions")
-ACTION_REQUIRED_KEYS = ("device_ref", "setting_key", "value")
+# 스키마 통제 키 화이트리스트 — 이 밖의 키는 어느 레벨에서든 거부(NFR6 전 레벨화)
+DEVICE_KEYS = frozenset({"device_ref", "device_type", "capabilities"})
+DEVICE_REQUIRED = ("device_ref", "device_type")
+ROUTINE_KEYS = frozenset({"trigger", "actions"})
+TRIGGER_KEYS = frozenset({"type", "params"})
+ACTION_KEYS = frozenset({"device_ref", "setting_key", "value"})
+ACTION_REQUIRED = ("device_ref", "setting_key", "value")
 
-# 개인 식별 정보로 이어지는 키 조각. 부분 일치·대소문자 무시로 검사한다.
-# 완전한 목록일 수 없다 — 방어선이지 증명이 아니다. 새 필드를 추가할 때
-# 여기 걸리면 "우회할 이름을 찾는" 게 아니라 그 필드가 정말 필요한지 되묻는다.
+# device_ref: 생성된 불투명 토큰만 허용 — 사람이 "엄마 방 에어컨"이나 이메일을
+# 쓸 수 있는 자유 문자열이 곧 PII 통로였다(리뷰 F1). 표시용 이름이 필요해지면
+# 그것은 '프로필 밖'(기기 로컬)의 문제다.
+TOKEN_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+# setting_key·device_type·capability·trigger type: ASCII 소문자 토큰 —
+# 한국어 키·호모글리프 키(키릴 а 등)가 형식 단계에서 전부 죽는다(리뷰 F2)
+KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,31}$")
+
+# 식별자성 키 조각 — 영어 + 한국어(리뷰 F2: 영어만으로는 한국어 제품에서 무의미)
 FORBIDDEN_KEY_FRAGMENTS = (
-    "name",
-    "account",
-    "email",
-    "phone",
-    "user_id",
-    "userid",
-    "birth",
-    "address",
-    "contact",
-    "ssn",
-    "gender",
-    "owner",
+    "name", "account", "email", "phone", "user_id", "userid",
+    "birth", "address", "contact", "ssn", "gender", "owner",
+    "resident", "alias", "nickname",
+    "이름", "계정", "이메일", "메일주소", "전화", "연락처", "주소",
+    "생년", "생일", "주민", "성별", "소유자",
 )
+# 가구 식별·위치 프리미티브 — ssid+좌표는 이메일보다 강한 식별자다(리뷰 Vex)
+FORBIDDEN_EXACT_KEYS = frozenset({
+    "ssid", "mac", "serial", "imei", "lat", "lon",
+    "latitude", "longitude", "geo", "gps",
+})
+# 웰니스성 키 조각 — settings 옆문 봉쇄(리뷰 F4). NFR5: 진단·의료 판단 배제
+WELLNESS_KEY_FRAGMENTS = (
+    "sleep", "wellness", "health", "heart", "hrv", "blood", "spo2",
+    "stress", "body_fat", "bp_", "calorie", "weight", "pulse", "glucose",
+)
+
+# 값 PII 패턴 — v1은 값을 한 번도 안 읽었다(리뷰 F1). 완전한 목록일 수 없는
+# 방어선이며, 문서에는 '스캔'이라고만 적지 '증명'이라고 적지 않는다.
+_PII_VALUE_RES = (
+    ("이메일", re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")),
+    ("전화번호", re.compile(r"01[016789][-\s]?\d{3,4}[-\s]?\d{4}")),
+    ("주민등록번호", re.compile(r"\d{6}[-\s]?[1-4]\d{6}")),
+)
+_PII_VALUE_FRAGMENTS = ("이름", "전화번호", "주민등록", "성명", "연락처")
+
+MAX_SCAN_DEPTH = 24   # json.loads는 ~2000, 재귀 스캔은 1000에서 죽는다(리뷰 F3·4)
+_MAX_STR = 256        # 폭주 문자열 상한 — 8KB/키 예산(Story 1.2)의 여유분
 
 
 def new_profile() -> dict:
-    """현재 스키마 버전이 각인된 빈 프로필."""
+    """현재 스키마 버전이 각인된 빈 프로필. 호출마다 새 컨테이너."""
     return {
         "schema_version": SCHEMA_VERSION,
         "devices": [],
@@ -87,151 +111,285 @@ def new_profile() -> dict:
 
 
 def is_supported(version) -> bool:
-    """지원 버전 판정. 모르는 값·형식 위반은 전부 False —
-    호출자가 '아마 괜찮겠지'로 넘어갈 여지를 남기지 않는다."""
-    if not isinstance(version, str):
-        return False
-    parts = version.split(".")
-    if len(parts) != 3 or not all(p.isdigit() for p in parts):
-        return False
-    return version in SUPPORTED_VERSIONS
+    """지원 버전 판정. 모르는 값·타입은 전부 False."""
+    return isinstance(version, str) and version in SUPPORTED_VERSIONS
 
 
-def assert_no_identifiers(obj, _path="profile") -> list:
-    """중첩 dict/list를 재귀 순회해 식별자성 키를 찾는다.
+# ---------- 식별자 스캔 (FR7 방어선) ----------
+# 스키마가 스스로 선언한 키 — 식별자·웰니스 스캔 면제 대상.
+# reserved_wellness가 'wellness' 조각에 걸리는 자기모순 방지. 여기 넣을 수 있는
+# 것은 이 파일의 화이트리스트 상수에 이미 존재하는 키뿐이다.
+_SCHEMA_OWN_KEYS = frozenset(TOP_LEVEL_KEYS) | DEVICE_KEYS | ROUTINE_KEYS \
+    | TRIGGER_KEYS | ACTION_KEYS
 
-    반환: 발견된 위치 목록(빈 리스트 = 없음). 이름이 assert_인데 예외를 던지지
-    않는 것은 의도다 — 여러 위반을 한 번에 사람에게 보여줘야 하고, 이 함수가
-    AC4의 '증명 수단'이라 테스트에서 반환값을 검사하기 때문이다.
+
+def _key_violations(key, path) -> list:
+    if key in _SCHEMA_OWN_KEYS:
+        return []
+    errs = []
+    k = unicodedata.normalize("NFKC", str(key))
+    if not k.isascii():
+        # 한국어 키·호모글리프 키를 개별 단어 목록으로 쫓는 대신 통째로 거부.
+        # 스키마 통제 키는 전부 ASCII다 — 비ASCII 키는 정의상 스키마 밖이다.
+        errs.append(f"{path}.{key}: 비ASCII 키 — 스키마 통제 키가 아님(FR7 방어)")
+        k_l = k.lower()
+    else:
+        k_l = k.lower()
+    for frag in FORBIDDEN_KEY_FRAGMENTS:
+        if frag in k_l:
+            errs.append(f"{path}.{key}: 식별자성 키('{frag}') — FR7 위반")
+            break
+    if k_l in FORBIDDEN_EXACT_KEYS:
+        errs.append(f"{path}.{key}: 가구 식별·위치 키 — FR7 위반")
+    for frag in WELLNESS_KEY_FRAGMENTS:
+        if frag in k_l:
+            errs.append(f"{path}.{key}: 웰니스성 키('{frag}') — NFR5 위반")
+            break
+    return errs
+
+
+def _value_violations(value, path) -> list:
+    if not isinstance(value, str):
+        return []
+    v = unicodedata.normalize("NFKC", value)
+    errs = []
+    if len(v) > _MAX_STR:
+        errs.append(f"{path}: 문자열 {len(v)}자 — 상한 {_MAX_STR}자 초과")
+    for label, rx in _PII_VALUE_RES:
+        if rx.search(v):
+            errs.append(f"{path}: 값에 {label} 패턴 — FR7 위반")
+    for frag in _PII_VALUE_FRAGMENTS:
+        if frag in v:
+            errs.append(f"{path}: 값에 식별자성 문구('{frag}') — FR7 위반")
+            break
+    return errs
+
+
+def find_identifier_violations(obj, _path="profile", _depth=0, _seen=None) -> list:
+    """키와 **값**을 재귀 스캔해 식별자·웰니스 위반 위치 목록을 반환한다.
+
+    빈 리스트 = 미검출. 예외를 던지지 않는다 — 깊이 초과·순환 참조도
+    위반으로 보고한다(fail-closed). v1의 이름 assert_no_identifiers는
+    raise하지 않으면서 assert_를 자칭하는 거짓 이름이라 개명했다(리뷰 Yui).
     """
+    if _seen is None:
+        _seen = set()
+    if _depth > MAX_SCAN_DEPTH:
+        return [f"{_path}: 중첩 깊이 {MAX_SCAN_DEPTH} 초과 — 스캔 불가, 프로필 거부"]
     found = []
     if isinstance(obj, dict):
+        if id(obj) in _seen:
+            return [f"{_path}: 순환 참조 — 스캔 불가, 프로필 거부"]
+        _seen.add(id(obj))
         for k, v in obj.items():
-            key_l = str(k).lower()
-            for frag in FORBIDDEN_KEY_FRAGMENTS:
-                if frag in key_l:
-                    found.append(f"{_path}.{k}: 식별자성 키('{frag}') — FR7 위반")
-                    break
-            found += assert_no_identifiers(v, f"{_path}.{k}")
+            found += _key_violations(k, _path)
+            found += _value_violations(v, f"{_path}.{k}")
+            found += find_identifier_violations(v, f"{_path}.{k}", _depth + 1, _seen)
+        _seen.discard(id(obj))
     elif isinstance(obj, list):
+        if id(obj) in _seen:
+            return [f"{_path}: 순환 참조 — 스캔 불가, 프로필 거부"]
+        _seen.add(id(obj))
         for i, v in enumerate(obj):
-            found += assert_no_identifiers(v, f"{_path}[{i}]")
+            found += _value_violations(v, f"{_path}[{i}]")
+            found += find_identifier_violations(v, f"{_path}[{i}]", _depth + 1, _seen)
+        _seen.discard(id(obj))
     return found
 
 
-def validate_profile(profile) -> list:
-    """프로필 검증. 위반 사유 목록을 반환한다(빈 리스트 = 통과).
+# ---------- 구조 검증 헬퍼 (전부 목록 반환, 예외 없음) ----------
+def _is_scalar(v) -> bool:
+    if isinstance(v, bool) or isinstance(v, int) or isinstance(v, str):
+        return True
+    if isinstance(v, float):
+        return math.isfinite(v)   # NaN·Inf는 JSON 밖 — 직렬화 게이트(리뷰 F6)
+    return False
 
-    예외가 아니라 목록을 반환하는 이유: 여러 위반을 한 번에 보고해야 사람이
-    판단할 수 있다. (synthetic_panel.validate_seg_bundle()은 '실패 시 사유
-    문자열' 단일 반환인데, 그쪽은 게이트라 첫 실패에서 멈추는 게 맞고
-    이쪽은 스키마 검사라 전수 보고가 맞다.)
-    """
+
+def _check_token(v, path, name) -> list:
+    if not isinstance(v, str) or not TOKEN_RE.fullmatch(v):
+        return [f"{path} {name}는 토큰 형식([a-z0-9_-] 1~32자) 문자열이어야 함 — "
+                f"현재 {type(v).__name__}"]
+    return []
+
+
+def _check_keyname(v, path, name) -> list:
+    if not isinstance(v, str) or not KEY_RE.fullmatch(v):
+        return [f"{path} {name}는 ASCII 소문자 키 형식이어야 함 — "
+                f"현재 {v!r}"]
+    return []
+
+
+def _check_dict_shape(obj, allowed, required, path) -> list:
+    """dict 여부 + 미지 키 + 필수 키. dict가 아니면 그 사유만 반환."""
+    if not isinstance(obj, dict):
+        return [f"{path}가 객체가 아님({type(obj).__name__})"]
+    errs = [f"{path} 미지의 키: {k} — 조용한 확장 금지(NFR6)"
+            for k in obj if k not in allowed]
+    errs += [f"{path} 필수 키 누락: {k}" for k in required if k not in obj]
+    return errs
+
+
+def _validate_top_level(profile) -> list:
+    errs = [f"필수 최상위 키 누락: {k}"
+            for k in REQUIRED_TOP_LEVEL_KEYS if k not in profile]
+    errs += [f"미지의 최상위 키: {k} — 조용한 확장 금지(NFR6)"
+             for k in profile if k not in TOP_LEVEL_KEYS]
+    if "schema_version" in profile:
+        v = profile["schema_version"]
+        if not is_supported(v):
+            errs.append(f"지원하지 않는 스키마 버전: {v!r} "
+                        f"(지원: {sorted(SUPPORTED_VERSIONS)})")
+    return errs
+
+
+def _validate_devices(devices):
+    """반환: (refs 또는 None, errs). refs가 None이면 참조 검사 불가 상태 —
+    v1은 이때 조용히 스킵했지만(리뷰 Boundary F1) 이제 그 자체가 위반이다."""
+    if devices is None:
+        return None, ["devices가 null — 스킵이 아니라 위반(배열이어야 함)"]
+    if not isinstance(devices, list):
+        return None, [f"devices는 배열이어야 함({type(devices).__name__})"]
+    errs, refs = [], set()
+    for i, d in enumerate(devices):
+        path = f"devices[{i}]"
+        shape = _check_dict_shape(d, DEVICE_KEYS, DEVICE_REQUIRED, path)
+        errs += shape
+        if not isinstance(d, dict):
+            continue
+        ref = d.get("device_ref")
+        tok = _check_token(ref, path, "device_ref")
+        errs += tok
+        if not tok:
+            if ref in refs:
+                errs.append(f"{path} device_ref 중복: {ref!r} — "
+                            f"복원 시 매칭이 비결정적이 됨")
+            refs.add(ref)
+        if "device_type" in d:
+            errs += _check_keyname(d["device_type"], path, "device_type")
+        caps = d.get("capabilities", [])
+        if not isinstance(caps, list):
+            errs.append(f"{path}.capabilities는 배열이어야 함")
+        else:
+            for j, c in enumerate(caps):
+                errs += _check_keyname(c, f"{path}.capabilities[{j}]", "항목")
+    return refs, errs
+
+
+def _validate_settings(settings, refs) -> list:
+    if settings is None:
+        return ["settings가 null — 스킵이 아니라 위반(객체여야 함)"]
+    if not isinstance(settings, dict):
+        return [f"settings는 객체여야 함({type(settings).__name__})"]
     errs = []
+    for ref, kv in settings.items():
+        path = f"settings[{ref!r}]"
+        errs += _check_token(ref, "settings", "키(device_ref)")
+        if refs is not None and isinstance(ref, str) and TOKEN_RE.fullmatch(ref) \
+                and ref not in refs:
+            errs.append(f"settings의 device_ref {ref!r}가 devices에 없음")
+        if not isinstance(kv, dict):
+            errs.append(f"{path}는 객체여야 함({type(kv).__name__})")
+            continue
+        for k, v in kv.items():
+            errs += _check_keyname(k, path, "setting_key")
+            if not _is_scalar(v):
+                errs.append(f"{path}.{k} 값은 스칼라(str/int/float/bool, "
+                            f"유한값)여야 함 — 현재 {type(v).__name__}")
+    return errs
+
+
+def _validate_action(a, refs, path) -> list:
+    errs = _check_dict_shape(a, ACTION_KEYS, ACTION_REQUIRED, path)
+    if not isinstance(a, dict):
+        return errs
+    ref = a.get("device_ref")
+    tok = _check_token(ref, path, "device_ref")
+    errs += tok
+    if not tok and refs is not None and ref not in refs:
+        errs.append(f"{path}가 미등록 기기 {ref!r}를 참조")
+    if "setting_key" in a:
+        errs += _check_keyname(a["setting_key"], path, "setting_key")
+    if "value" in a and not _is_scalar(a["value"]):
+        errs.append(f"{path}.value는 스칼라여야 함")
+    return errs
+
+
+def _validate_routines(routines, refs) -> list:
+    if routines is None:
+        return ["routines가 null — 스킵이 아니라 위반(배열이어야 함)"]
+    if not isinstance(routines, list):
+        return [f"routines는 배열이어야 함({type(routines).__name__})"]
+    errs = []
+    for i, r in enumerate(routines):
+        path = f"routines[{i}]"
+        errs += _check_dict_shape(r, ROUTINE_KEYS, ("trigger", "actions"), path)
+        if not isinstance(r, dict):
+            continue
+        trigger = r.get("trigger")
+        if "trigger" in r:
+            errs += _check_dict_shape(trigger, TRIGGER_KEYS, ("type",),
+                                      f"{path}.trigger")
+            if isinstance(trigger, dict):
+                if "type" in trigger:
+                    errs += _check_keyname(trigger["type"], f"{path}.trigger", "type")
+                params = trigger.get("params", {})
+                if not isinstance(params, dict):
+                    errs.append(f"{path}.trigger.params는 객체여야 함")
+                else:
+                    for k, v in params.items():
+                        errs += _check_keyname(k, f"{path}.trigger.params", "키")
+                        if not _is_scalar(v):
+                            errs.append(f"{path}.trigger.params.{k} 값은 "
+                                        f"스칼라여야 함")
+        actions = r.get("actions")
+        if "actions" in r:
+            if not isinstance(actions, list) or not actions:
+                errs.append(f"{path}.actions는 비어있지 않은 배열이어야 함")
+            else:
+                for j, a in enumerate(actions):
+                    errs += _validate_action(a, refs, f"{path}.actions[{j}]")
+    return errs
+
+
+def _validate_reserved_wellness(profile) -> list:
+    if "reserved_wellness" not in profile:
+        return []   # 누락은 _validate_top_level이 이미 보고
+    rw = profile["reserved_wellness"]
+    if not isinstance(rw, dict):
+        return [f"reserved_wellness는 객체여야 함({type(rw).__name__})"]
+    if rw:
+        return ["reserved_wellness는 예약 필드 — 값을 담을 수 없다"
+                f"(NFR5: 진단·의료 판단 기능 배제). 발견된 키: {sorted(map(str, rw))}"]
+    return []
+
+
+def validate_profile(profile) -> list:
+    """프로필 검증. 위반 사유 목록 반환(빈 리스트 = 통과).
+
+    계약: **어떤 입력에도 예외를 던지지 않는다.** v1은 unhashable ref·깊은
+    중첩에서 크래시했고, 그 크래시가 마지막 줄의 PII 스캔을 선점했다(리뷰 F3) —
+    try/except로 감싼 호출자에서 PII 미검사 프로필이 통과하는 경로였다.
+    v2는 ① 식별자 스캔을 **먼저** 돌리고 ② 구조 검사를 전부 total function으로
+    만들고 ③ 그래도 남는 내부 오류는 통과가 아니라 거부로 처리한다(fail-closed).
+    """
     if not isinstance(profile, dict):
         return [f"프로필 최상위가 객체가 아님({type(profile).__name__})"]
-
-    for key in REQUIRED_TOP_LEVEL_KEYS:
-        if key not in profile:
-            errs.append(f"필수 최상위 키 누락: {key}")
-
-    for key in profile:
-        if key not in TOP_LEVEL_KEYS:
-            errs.append(f"미지의 최상위 키: {key} — 조용한 확장 금지(NFR6)")
-
-    version = profile.get("schema_version")
-    if "schema_version" in profile and not is_supported(version):
-        errs.append(f"지원하지 않는 스키마 버전: {version!r} "
-                    f"(지원: {sorted(SUPPORTED_VERSIONS)})")
-
-    # ── devices
-    device_refs = set()
-    devices = profile.get("devices")
-    if devices is not None:
-        if not isinstance(devices, list):
-            errs.append("devices는 배열이어야 함")
-        else:
-            for i, d in enumerate(devices):
-                if not isinstance(d, dict):
-                    errs.append(f"devices[{i}]가 객체가 아님")
-                    continue
-                for k in DEVICE_REQUIRED_KEYS:
-                    if k not in d:
-                        errs.append(f"devices[{i}] 필수 키 누락: {k}")
-                ref = d.get("device_ref")
-                if ref is not None:
-                    if ref in device_refs:
-                        errs.append(f"devices[{i}] device_ref 중복: {ref!r} — "
-                                    f"복원 시 매칭이 비결정적이 됨")
-                    device_refs.add(ref)
-                caps = d.get("capabilities", [])
-                if not isinstance(caps, list):
-                    errs.append(f"devices[{i}].capabilities는 배열이어야 함")
-
-    # ── settings: {device_ref: {setting_key: value}}
-    settings = profile.get("settings")
-    if settings is not None:
-        if not isinstance(settings, dict):
-            errs.append("settings는 객체여야 함")
-        else:
-            for ref, kv in settings.items():
-                if devices is not None and isinstance(devices, list) \
-                        and ref not in device_refs:
-                    errs.append(f"settings의 device_ref {ref!r}가 devices에 없음")
-                if not isinstance(kv, dict):
-                    errs.append(f"settings[{ref!r}]는 객체여야 함")
-
-    # ── routines
-    routines = profile.get("routines")
-    if routines is not None:
-        if not isinstance(routines, list):
-            errs.append("routines는 배열이어야 함")
-        else:
-            for i, r in enumerate(routines):
-                if not isinstance(r, dict):
-                    errs.append(f"routines[{i}]가 객체가 아님")
-                    continue
-                for k in ROUTINE_REQUIRED_KEYS:
-                    if k not in r:
-                        errs.append(f"routines[{i}] 필수 키 누락: {k}")
-                trigger = r.get("trigger")
-                if trigger is not None and (not isinstance(trigger, dict)
-                                            or "type" not in trigger):
-                    errs.append(f"routines[{i}].trigger는 type을 가진 객체여야 함")
-                actions = r.get("actions")
-                if actions is not None:
-                    if not isinstance(actions, list) or not actions:
-                        errs.append(f"routines[{i}].actions는 비어있지 않은 배열이어야 함")
-                    else:
-                        for j, a in enumerate(actions):
-                            if not isinstance(a, dict):
-                                errs.append(f"routines[{i}].actions[{j}]가 객체가 아님")
-                                continue
-                            for k in ACTION_REQUIRED_KEYS:
-                                if k not in a:
-                                    errs.append(
-                                        f"routines[{i}].actions[{j}] 필수 키 누락: {k}")
-                            ref = a.get("device_ref")
-                            # 존재하지 않는 기기를 가리키는 루틴은 조용히 통과하면
-                            # 안 된다 — 이사(3.2)에서 '보류'로 다룰 대상이지만,
-                            # 지금은 프로필 자체의 정합성 위반이다.
-                            if ref is not None and devices is not None \
-                                    and isinstance(devices, list) \
-                                    and ref not in device_refs:
-                                errs.append(
-                                    f"routines[{i}].actions[{j}]가 미등록 기기 "
-                                    f"{ref!r}를 참조")
-
-    # ── reserved_wellness (NFR5)
-    if "reserved_wellness" in profile:
-        rw = profile["reserved_wellness"]
-        if not isinstance(rw, dict):
-            errs.append("reserved_wellness는 객체여야 함")
-        elif rw:
-            errs.append("reserved_wellness는 예약 필드 — 값을 담을 수 없다"
-                        "(NFR5: 진단·의료 판단 기능 배제). "
-                        f"발견된 키: {sorted(rw)}")
-
-    # ── 식별자 부재 (FR7 선행). 별도 호출을 잊어도 여기서 막힌다.
-    errs += assert_no_identifiers(profile)
+    errs = []
+    try:
+        # ① FR7/NFR5 스캔 먼저 — 구조가 어떻게 깨져 있어도 이건 실행된다
+        errs += find_identifier_violations(profile)
+        # ② 구조 검증
+        errs += _validate_top_level(profile)
+        refs, dev_errs = _validate_devices(profile.get("devices")) \
+            if "devices" in profile else (None, [])
+        errs += dev_errs
+        if "settings" in profile:
+            errs += _validate_settings(profile["settings"], refs)
+        if "routines" in profile:
+            errs += _validate_routines(profile["routines"], refs)
+        errs += _validate_reserved_wellness(profile)
+    except Exception as e:   # 계약 방어: 내부 오류 = 거부, 통과 아님
+        errs.append(f"검증기 내부 오류({type(e).__name__}: {e}) — "
+                    f"프로필 거부(fail-closed)")
     return errs

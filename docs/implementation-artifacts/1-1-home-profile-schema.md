@@ -4,7 +4,7 @@ baseline_commit: c77540ddbfaf5e5ea23edadc507c7597c30cf2f7
 
 # Story 1.1: 홈 프로필 스키마 정의
 
-Status: changes-requested
+Status: review
 
 ## Story
 
@@ -266,6 +266,7 @@ claude-fable-5 (Claude Fable 5)
 |---|---|
 | 2026-07-22 | Story 1.1 구현 — 홈 프로필 스키마 v1.0.0 + 회귀 테스트 23건 + 스키마 명세 문서. 전체 테스트 78 passed |
 | 2026-07-22 | **Code Review Crew 평결: changes-requested.** AC2·AC3·AC4 미충족 재판정. PROFILE_SCHEMA.md §2·§4의 거짓 보증 문구 철회·정정 |
+| 2026-07-22 | **리뷰 반영 v2 재작성.** 스키마·테스트 전면 재작성 — 리뷰 우회 14건 전수 차단 확인, 스텁 판별 테스트(스텁 13건 FAIL), 전체 87 passed. 상태 review 복귀 |
 
 ## Senior Developer Review (AI)
 
@@ -304,6 +305,21 @@ claude-fable-5 (Claude Fable 5)
   `device_ref:null`이면 중복 검사와 유령 참조 검사가 동시에 꺼진다.
 - **직렬화 불가 프로필이 통과한다**: `set` 값 → `validate_profile()==[]`,
   `json.dumps()` → `TypeError`. Story 1.2가 정면으로 밟을 지점.
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][High] 테스트 스텁 판별력 확보 — 정확한 위반 수·경로 단언으로 재작성, 스텁 재검증 13건 FAIL 확인
+- [x] [AI-Review][High] FR7 값 검사 — 이메일·전화·주민번호 정규식 + 한국어 식별 문구 스캔(값), 키 조각 영+한 확장
+- [x] [AI-Review][High] 키 구조 봉쇄 — 전 레벨 화이트리스트, device_ref 토큰 형식, setting_key ASCII 형식(한국어·호모글리프 키 형식 단계 차단)
+- [x] [AI-Review][High] null = 위반 (스킵 아님) — devices/settings/routines/trigger/device_ref 전부
+- [x] [AI-Review][High] 크래시 봉쇄 — unhashable ref·깊이 폭탄·순환 참조 전부 위반 목록으로. 식별자 스캔을 최우선 실행 + fail-closed
+- [x] [AI-Review][High] NFR5 옆문 — reserved_wellness 필수 키 승격 + settings 웰니스성 키 거부
+- [x] [AI-Review][Med] 직렬화 게이트 — 값은 스칼라만(유한 float), set·NaN 거부
+- [x] [AI-Review][Med] assert_no_identifiers → find_identifier_violations 개명
+- [x] [AI-Review][Med] validate_profile 헬퍼 6개로 분해 (7단 중첩 해소)
+- [x] [AI-Review][Med] MIGRATIONS 삭제 — 마이그레이션은 '미결정'으로 정직 표기 (AC3 재해석: 버전 각인+미지 버전 거부까지가 이 스토리의 실질)
+- [x] [AI-Review][Low] __init__.py __all__ 명시, SUPPORTED_VERSIONS 공개, 패키지 import 테스트 추가
+- [x] [AI-Review][Low] is_supported의 inert semver 파싱 제거
 
 ### 구조 (Yui)
 
