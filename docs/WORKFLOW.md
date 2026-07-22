@@ -78,10 +78,10 @@ flowchart LR
     G2 --> HUMAN["사람 검수 체크리스트<br/>(최종 게이트)"]
 ```
 
-## 4. ThinQ Village — 합성패널 (synthetic_panel.py v1.0)
+## 4. ThinQ Village — 합성패널 (synthetic_panel.py v1.1)
 
-설문 응답자를 LLM 페르소나로 확장해 **홀드아웃 문항으로 자기검증**하고 가격 what-if를
-돌리는 단계. 04가 v2.9에서 새로 내놓는 `seg_manifest.json`·`seg_members.csv`가
+설문 응답자를 LLM 페르소나로 확장해 **홀드아웃 문항으로 자기검증**하고 가격 what-if,
+시나리오 반응(이사 당일), 세그먼트 간 상호작용 2라운드를 돌리는 단계. 04가 v2.9에서 새로 내놓는 `seg_manifest.json`·`seg_members.csv`가
 게이트의 전제라서, 04가 v2.9 미만이면 패널은 실행 자체가 되지 않는다.
 
 ```mermaid
@@ -97,6 +97,9 @@ flowchart TB
     PREP --> J1["페르소나 생성<br/>persona_task"]
     PREP --> J2["홀드아웃 예측<br/>온바디수용도(1~5)<br/>지불의사(0~2)"]
     PREP --> J3["가격 what-if<br/>1,900 / 4,900 / 9,900원"]
+    PREP --> J4["시나리오 반응 (v1.1)<br/>이사 당일 서사 (FR5)"]
+
+    J4 --> R2["상호작용 R2 (v1.1)<br/>타 세그먼트 발언을<br/>untrusted_llm_output으로<br/>교차 주입 → 동의/반박"]
 
     J2 --> TR["셀당 --n-trials 반복<br/>(기본 3회)"]
     TR --> FID["재현율 = 1 - TVD<br/>실제 분포 대조"]
@@ -104,6 +107,7 @@ flowchart TB
 
     J1 --> OUT["out_panel/&lt;타임스탬프&gt;/<br/>watermark: synthetic_panel<br/>(--demo 시 +synthetic_demo)"]
     J3 --> OUT
+    R2 --> OUT
     AGG --> OUT
 ```
 

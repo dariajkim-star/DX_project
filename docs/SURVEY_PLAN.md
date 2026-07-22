@@ -186,5 +186,9 @@ v3 인코딩 주의:
       테스트(문12·문13 제외 조련 → 1-TVD, 셀당 `--n-trials` 기본 3회 mean±sd — 단일
       표본 금지), 가격 what-if(워터마크+실측 아님 병기), `--dry-run` 오프라인 검증.
       04_segmentation v2.9가 seg_manifest.json·seg_members.csv를 추가로 산출.
+- [x] ThinQ Village v1.1 (2026-07-22) — §4.3 잔여 구현: 이사 당일 시나리오 반응
+      (FR5·HMW-2, 서사+구조화 JSON, adoption_intent '실측 아님' 명기) + 세그먼트 간
+      상호작용 2라운드(R1=시나리오 발언을 타 세그먼트에 untrusted_llm_output으로
+      교차 주입 → 동의/반박, system 지시 영역과 격리). 회귀 테스트 23개.
 - [ ] ThinQ Village 실행 — 실설문 survey.csv → 04 → `python synthetic_panel.py`
       (OPENAI_API_KEY 필요. 실행 전 `--dry-run`으로 프롬프트 검수)
