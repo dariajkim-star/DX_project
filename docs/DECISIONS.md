@@ -12,6 +12,7 @@
 | 2026-07-21 | 네이버는 토픽 분석 제외 — P-2 심층·정성 증언 전용 | [crawl-strategy](meetings/2026-07-21_crawl-strategy.md) §1.1 |
 | 2026-07-21 | 키워드 매트릭스 4축 재설계, 유효율 기준 강화 — C축만 채택(20.9%) | [crawl-strategy](meetings/2026-07-21_crawl-strategy.md) §2 |
 | 2026-07-21 | 분석 순서: ThinQ 재분석 → 네이버 정성 → SmartThings 토픽(3순위) | [crawl-strategy](meetings/2026-07-21_crawl-strategy.md) §1.2 |
+| 2026-07-22 | PostgreSQL 도입 — **발견 트랙 전용**(B 분석결과 + C 실행이력), Epic 5로 분리해 발표 서사 밖, Docker 호스팅. 처방 트랙은 AST 테스트로 차단 | [postgres-portfolio-track](meetings/2026-07-22_postgres-portfolio-track.md) |
 
 ## 운영 원칙 (미팅에서 확립)
 1. **주제가 수집·분석 스펙을 정한다** — 데이터량은 목표가 아니다.
