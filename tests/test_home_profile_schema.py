@@ -147,13 +147,20 @@ def test_duplicate_device_ref_reported(hp):
     p = _make_profile(hp)
     p["devices"][1]["device_ref"] = "d1"
     errs = _errs(hp, p)
-    assert any("d1" in e and "중복" in e for e in errs)
+    hits = [e for e in errs if "중복" in e and "devices[1]" in e]
+    assert len(hits) == 1, errs
+    # 2차 리뷰 Vex F3: 메시지에 값 원문이 들어가면 안 된다 — 위치와 재작성만
+    assert "'d1'" not in hits[0] and "<str len=2" in hits[0]
 
 
 def test_settings_ghost_device_reported(hp):
     p = _make_profile(hp)
     p["settings"]["ghost7"] = {"power": "on"}
-    assert any("ghost7" in e for e in _errs(hp, p))
+    errs = _errs(hp, p)
+    # settings 키는 사용자 통제 문자열 — 서수로 지목하고 원문은 재작성한다(Vex F6)
+    hits = [e for e in errs if "settings[#2]" in e and "devices에 없음" in e]
+    assert len(hits) == 1, errs
+    assert "ghost7" not in " ".join(errs)
 
 
 def test_numeric_device_ref_rejected(hp):
@@ -259,6 +266,70 @@ def test_identifier_scan_runs_even_when_structure_broken(hp):
     p["settings"]["d1"]["email"] = "a@b.c"
     errs = _errs(hp, p)
     assert any("email" in e for e in errs)
+
+
+# ---------- 2차 리뷰: 제로폭 은닉 / 메시지 유출 / 정수 우회 ----------
+_HIDDEN = [
+    "hong" + chr(0xFEFF) + "@gmail.com",
+    "hong" + chr(0x200B) + "@gmail.com",
+    "010-1234" + chr(0x200B) + "-5678",
+    "a" + chr(0x00AD) + "b" + chr(0x2060) + "c",
+]
+
+
+def test_zero_width_hidden_pii_rejected(hp):
+    """제로폭 한 글자로 PII 정규식이 무력화되던 통로 (Vex F1)"""
+    for hidden in _HIDDEN:
+        p = _make_profile(hp)
+        p["settings"]["d1"]["memo"] = hidden
+        assert _errs(hp, p), f"{hidden!r} 무보고 통과"
+
+
+def test_surrogate_in_value_rejected(hp):
+    """UTF-8 인코딩 불가 — 통과 후 저장·측정이 깨지던 경로 (Boundary F2)"""
+    p = _make_profile(hp)
+    p["settings"]["d1"]["memo"] = chr(0xD800)
+    assert _errs(hp, p)
+
+
+def test_violation_messages_never_echo_untrusted_values(hp):
+    """거부 사유가 PII 운반체가 되면 안 된다 (Vex F3) — 게이트가 막은 걸 로그가 흘린다"""
+    secrets = ("hong.gildong@gmail.com", "010-1234-5678", "900101-1234567")
+    cases = [
+        lambda p, s: p["devices"][0].update({"device_type": s}),
+        lambda p, s: p["settings"].update({s: {"power": "off"}}),
+        lambda p, s: p["settings"]["d1"].update({s: 1}),
+        lambda p, s: p["routines"][0]["actions"][0].update({"setting_key": s}),
+        lambda p, s: p.update({"reserved_wellness": {s: 1}}),
+        lambda p, s: p.update({"schema_version": s}),
+    ]
+    for secret in secrets:
+        for i, mutate in enumerate(cases):
+            p = _make_profile(hp)
+            mutate(p, secret)
+            errs = _errs(hp, p)
+            assert errs, f"case{i} 무보고 통과"
+            blob = " ".join(errs)
+            assert secret not in blob, f"case{i}가 원문 유출: {blob[:120]}"
+
+
+def test_version_message_is_length_bounded(hp):
+    """5MB 페이로드가 500만자 에러 문자열을 만들던 증폭 (Vex F4)"""
+    p = _make_profile(hp)
+    p["schema_version"] = "9" * 100_000
+    errs = _errs(hp, p)
+    assert errs
+    assert max(len(e) for e in errs) < 500
+
+
+def test_huge_integer_value_rejected(hp):
+    """_MAX_STR이 정수로 우회되던 구멍 (Boundary F4)"""
+    p = _make_profile(hp)
+    p["settings"]["d1"]["target_temp"] = int("9" * 4000)
+    assert _errs(hp, p)
+    p2 = _make_profile(hp)
+    p2["settings"]["d1"]["target_temp"] = 26        # 정상값은 통과
+    assert _errs(hp, p2) == []
 
 
 # ---------- AC2/NFR5: 웰니스 봉쇄 — 앞문과 옆문 ----------

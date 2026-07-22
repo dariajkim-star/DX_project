@@ -111,7 +111,9 @@ def test_serialize_rejects_invalid_profile():
     blob, errs = st.serialize(p)
     assert blob is None
     assert len(errs) >= 1
-    assert any("ghost" in e for e in errs)
+    # 2차 리뷰 Vex F6: settings 키는 서수로 지목되고 원문은 재작성된다
+    assert any("settings[#0]" in e and "devices에 없음" in e for e in errs)
+    assert "ghost" not in " ".join(errs)
 
 
 def test_serialize_rejects_pii_bearing_profile():
@@ -202,19 +204,21 @@ def test_deep_nesting_payload_rejected_without_crash():
 # ---------- AC1·AC2: 크기 리포트 ----------
 def test_size_report_total_matches_serialized_length(typical):
     blob, _ = st.serialize(typical)
-    rep = st.size_report(typical)
+    rep, errs = st.size_report(typical)
+    assert errs == []
     assert rep["total_bytes"] == len(blob)
 
 
 def test_size_report_sections_do_not_exceed_total(small, typical, large):
     for p in (small, typical, large):
-        rep = st.size_report(p)
+        rep, errs = st.size_report(p)
+        assert errs == []
         assert sum(rep["sections"].values()) <= rep["total_bytes"]
         assert set(rep["sections"]) == {"devices", "settings", "routines"}
 
 
 def test_size_report_per_unit_averages(typical):
-    rep = st.size_report(typical)
+    rep, _ = st.size_report(typical)
     n_dev = len(typical["devices"])
     assert rep["bytes_per_device"] == pytest.approx(
         rep["sections"]["devices"] / n_dev, rel=1e-6)
@@ -223,27 +227,33 @@ def test_size_report_per_unit_averages(typical):
 
 
 def test_size_report_zero_units_no_division_error():
-    rep = st.size_report(new_profile())
+    rep, errs = st.size_report(new_profile())
+    assert errs == []
     assert rep["bytes_per_device"] is None
     assert rep["bytes_per_routine"] is None
     assert rep["total_bytes"] > 0
 
 
 def test_top_contributors_are_real_paths(large):
-    rep = st.size_report(large)
+    rep, _ = st.size_report(large)
     tops = rep["top_contributors"]
     assert 1 <= len(tops) <= 5
     prev = math.inf
     for entry in tops:
         assert entry["bytes"] <= prev            # 내림차순
         prev = entry["bytes"]
-        assert st.resolve_path(large, entry["path"]) is not None, entry["path"]
+        # 2차 리뷰 Vex F6: 경로에 키 원문을 넣지 않는다 — 섹션+서수로 지목
+        node = large[entry["section"]]
+        seq = node if isinstance(node, list) else list(node.values())
+        assert 0 <= entry["index"] < len(seq)
+        assert len(st._dumps(seq[entry["index"]])) == entry["bytes"]
 
 
 def test_budget_verdict_fields(typical):
-    rep = st.size_report(typical)
+    rep, _ = st.size_report(typical)
     assert isinstance(rep["within_key_budget"], bool)
-    assert isinstance(rep["within_total_budget"], bool)
+    # within_total_budget은 삭제됨 — 키 예산이 총량보다 작아 항상 True였다(Yui F6)
+    assert "within_total_budget" not in rep
     assert rep["key_budget_bytes"] == int(st.BUDGET_STORAGE_KEY * st.MARGIN)
     assert rep["pct_of_key_budget"] == pytest.approx(
         100 * rep["total_bytes"] / rep["key_budget_bytes"], rel=1e-6)
@@ -252,15 +262,15 @@ def test_budget_verdict_fields(typical):
 def test_budget_boundary_exact(monkeypatch):
     """마진 직전·직후 판정이 뒤집히는지 — 경계를 실제로 넘겨본다"""
     p = st.make_sample_profile(3, 2)
-    total = st.size_report(p)["total_bytes"]
+    total = st.size_report(p)[0]["total_bytes"]
     monkeypatch.setattr(st, "BUDGET_STORAGE_KEY", int(total / st.MARGIN) + 8)
-    assert st.size_report(p)["within_key_budget"] is True
+    assert st.size_report(p)[0]["within_key_budget"] is True
     monkeypatch.setattr(st, "BUDGET_STORAGE_KEY", int(total / st.MARGIN) - 8)
-    assert st.size_report(p)["within_key_budget"] is False
+    assert st.size_report(p)[0]["within_key_budget"] is False
 
 
 def test_ble_chunk_count(typical):
-    rep = st.size_report(typical)
+    rep, _ = st.size_report(typical)
     assert rep["ble_chunks"] == math.ceil(rep["total_bytes"] / st.BLE_MTU)
     assert st.BLE_MTU == 20
 
@@ -268,22 +278,33 @@ def test_ble_chunk_count(typical):
 def test_size_report_never_raises_on_invalid():
     """검증 미통과 프로필에도 리포트는 나와야 한다 — 초과 원인 진단이 목적이므로"""
     for bad in (None, {"schema_version": "x"}, {"devices": None}):
-        rep = st.size_report(bad)
-        assert isinstance(rep, dict)
+        rep, errs = st.size_report(bad)
+        assert isinstance(rep, dict) and isinstance(errs, list)
         assert "total_bytes" in rep
+    # 직렬화 불가 값: v1은 total_bytes=0 -> 예산 내로 보고했다(fail-open)
+    bad = st.make_sample_profile(3, 2)
+    bad["devices"][0]["capabilities"] = {1, 2}
+    rep, errs = st.size_report(bad)
+    assert rep["total_bytes"] is None
+    assert rep["within_key_budget"] is None      # True가 아니다
+    assert errs
 
 
 def test_report_grows_monotonically_with_size(small, typical, large):
-    a = st.size_report(small)["total_bytes"]
-    b = st.size_report(typical)["total_bytes"]
-    c = st.size_report(large)["total_bytes"]
+    a = st.size_report(small)[0]["total_bytes"]
+    b = st.size_report(typical)[0]["total_bytes"]
+    c = st.size_report(large)[0]["total_bytes"]
     assert a < b < c
 
 
 # ---------- 대표 가정은 실측이 아님을 코드가 스스로 밝힌다 ----------
-def test_assumptions_are_labelled_unmeasured():
-    assert "실측" in st.SAMPLE_ASSUMPTION_NOTE
-    assert st.SAMPLE_ASSUMPTIONS_ARE_MEASURED is False
+def test_assumption_constants_are_named_as_assumptions():
+    """이름이 경험적 주장을 하지 않아야 한다 (2차 리뷰 Yui F5).
+    죽은 불리언 상수 대신 이름 자체가 가정임을 말한다."""
+    assert st.ASSUMED_TYPICAL == st.TYPICAL
+    assert not hasattr(st, "SAMPLE_ASSUMPTIONS_ARE_MEASURED")
+    assert not hasattr(st, "resolve_path")
+    assert not hasattr(st, "format_report")
 
 
 def test_package_exports_storage_api():
@@ -291,3 +312,49 @@ def test_package_exports_storage_api():
     for name in ("serialize", "deserialize", "size_report"):
         assert name in home_profile.__all__
         assert hasattr(home_profile, name)
+    # 샘플 생성기는 제품 표면이 아니다 (2차 리뷰 Yui F7)
+    assert "make_sample_profile" not in home_profile.__all__
+
+
+# ---------- 2차 리뷰 회귀 ----------
+def test_oversized_wire_input_rejected_before_parsing():
+    """기기 20만대·15.6MB가 통과하던 폭 제한 부재 (Vex F5)"""
+    blob = b'{"x":"' + b"a" * (st.MAX_WIRE_BYTES + 10) + b'"}'
+    prof, errs = st.deserialize(blob)
+    assert prof is None
+    assert len(errs) == 1 and "상한" in errs[0]
+
+
+def test_duplicate_json_keys_rejected():
+    """검증은 깨끗한 사본을 보고 통과시키는데 원본 바이트엔 PII가 남던 경로 (Vex F2)"""
+    raw = (b'{"schema_version":"1.0.0",'
+           b'"settings":{"dev000":{"memo":"hong@gmail.com"}},'
+           b'"settings":{},'
+           b'"devices":[],"routines":[],"reserved_wellness":{}}')
+    prof, errs = st.deserialize(raw)
+    assert prof is None
+    assert any("중복 키" in e for e in errs)
+    assert "hong@gmail.com" not in " ".join(errs)
+
+
+def test_version_mismatch_message_is_bounded_and_redacted():
+    """버전 메시지가 PII 스캔을 안 거친 채 무제한 에코되던 증폭 (Vex F4)"""
+    raw = ('{"schema_version":"010-1234-5678","devices":[],"settings":{},'
+           '"routines":[],"reserved_wellness":{}}').encode()
+    prof, errs = st.deserialize(raw)
+    assert prof is None
+    assert "010-1234-5678" not in " ".join(errs)
+    big = ('{"schema_version":"' + "9" * 200_000 + '","devices":[]}').encode()
+    prof, errs = st.deserialize(big)
+    assert prof is None
+    assert max(len(e) for e in errs) < 500
+
+
+def test_surrogate_payload_rejected_at_wire():
+    """통과 후 저장·측정이 깨지던 고아 서로게이트 (Boundary F2)"""
+    raw = ('{"schema_version":"1.0.0","devices":[{"device_ref":"a",'
+           '"device_type":"x","capabilities":["p"]}],'
+           '"settings":{"a":{"p":"\\ud800"}},"routines":[],'
+           '"reserved_wellness":{}}').encode()
+    prof, errs = st.deserialize(raw)
+    assert prof is None and errs

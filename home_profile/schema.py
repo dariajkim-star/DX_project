@@ -34,6 +34,7 @@ v1의 MIGRATIONS 빈 레지스트리는 아무도 읽지 않는 장식이라 삭
   Connect IQ BLE 특성 ~20바이트 MTU, long write 미지원
   → devices[]·routines[] 원소가 각각 독립 직렬화되는 평평한 구조 유지.
 """
+import hashlib
 import math
 import re
 import unicodedata
@@ -96,7 +97,42 @@ _PII_VALUE_RES = (
 _PII_VALUE_FRAGMENTS = ("이름", "전화번호", "주민등록", "성명", "연락처")
 
 MAX_SCAN_DEPTH = 24   # json.loads는 ~2000, 재귀 스캔은 1000에서 죽는다(리뷰 F3·4)
-_MAX_STR = 256        # 폭주 문자열 상한 — 8KB/키 예산(Story 1.2)의 여유분
+_MAX_STR = 256        # 폭주 문자열 상한
+# 2차 리뷰(Boundary F4): _MAX_STR이 정수로 우회됐다 — 4,000자리 정수(4,012B)가
+# 값 하나로 통과. 수치 값의 자릿수도 제한한다.
+_MAX_INT_DIGITS = 20  # int64 범위를 덮는다. 가전 설정값에 이보다 큰 수는 없다.
+_VERSION_SHOW_RE = re.compile(r"[0-9A-Za-z.]{1,16}")
+
+
+def _redact(v) -> str:
+    """신뢰 불가 값을 위반 메시지에 넣지 않는다 (2차 리뷰 Vex F3).
+
+    v1은 거부한 값을 그대로 메시지에 찍었다 —
+    `device_type는 ... 현재 'hong.gildong@gmail.com'` 식으로. 이 목록은
+    호출자가 로그에 남기는 물건이라, **게이트가 막은 PII를 로그가 흘렸다.**
+    타입·길이·해시 앞 4자리만 남긴다(같은 값인지 대조는 가능, 복원은 불가).
+    """
+    if isinstance(v, str):
+        h = hashlib.sha256(v.encode("utf-8", "surrogatepass")).hexdigest()[:4]
+        return f"<str len={len(v)} #{h}>"
+    if isinstance(v, (int, float, bool)):
+        return f"<{type(v).__name__}>"
+    return f"<{type(v).__name__}>"
+
+
+def _bad_chars(text: str) -> str:
+    """제로폭·서식 제어·서로게이트 검출 (2차 리뷰 Vex F1 / Boundary F2).
+
+    NFKC는 전각은 접지만 Cf(format) 문자는 남긴다. 그런데 PII 정규식은
+    문자가 인접해야 매치되므로 `hong﻿@gmail.com` 한 방에 죽는다.
+    Cs(surrogate)는 UTF-8 인코딩 자체가 불가능해 통과 후 저장·측정이 깨진다.
+    설정 키·값에 이런 문자가 필요한 경우는 없다 — 통째로 거부한다.
+    """
+    for ch in text:
+        cat = unicodedata.category(ch)
+        if cat in ("Cf", "Cs"):
+            return f"U+{ord(ch):04X}({cat})"
+    return ""
 
 
 def new_profile() -> dict:
@@ -127,23 +163,27 @@ def _key_violations(key, path) -> list:
     if key in _SCHEMA_OWN_KEYS:
         return []
     errs = []
-    k = unicodedata.normalize("NFKC", str(key))
+    raw = str(key)
+    red = _redact(raw)          # 키 자체가 PII 운반체일 수 있다 — 그대로 찍지 않는다
+    bad = _bad_chars(raw)
+    if bad:
+        errs.append(f"{path}.{red}: 키에 제어·서로게이트 문자 {bad} — 거부")
+    k = unicodedata.normalize("NFKC", raw)
     if not k.isascii():
         # 한국어 키·호모글리프 키를 개별 단어 목록으로 쫓는 대신 통째로 거부.
         # 스키마 통제 키는 전부 ASCII다 — 비ASCII 키는 정의상 스키마 밖이다.
-        errs.append(f"{path}.{key}: 비ASCII 키 — 스키마 통제 키가 아님(FR7 방어)")
-        k_l = k.lower()
-    else:
-        k_l = k.lower()
+        errs.append(f"{path}.{red}: 비ASCII 키 — 스키마 통제 키가 아님(FR7 방어)")
+    k_l = k.lower()
+    # 보고되는 조각은 우리 상수 목록에서 온 것이라 안전하다 — 키 원문은 재작성.
     for frag in FORBIDDEN_KEY_FRAGMENTS:
         if frag in k_l:
-            errs.append(f"{path}.{key}: 식별자성 키('{frag}') — FR7 위반")
+            errs.append(f"{path}.{red}: 식별자성 키('{frag}') — FR7 위반")
             break
     if k_l in FORBIDDEN_EXACT_KEYS:
-        errs.append(f"{path}.{key}: 가구 식별·위치 키 — FR7 위반")
+        errs.append(f"{path}.{red}: 가구 식별·위치 키('{k_l}') — FR7 위반")
     for frag in WELLNESS_KEY_FRAGMENTS:
         if frag in k_l:
-            errs.append(f"{path}.{key}: 웰니스성 키('{frag}') — NFR5 위반")
+            errs.append(f"{path}.{red}: 웰니스성 키('{frag}') — NFR5 위반")
             break
     return errs
 
@@ -151,8 +191,12 @@ def _key_violations(key, path) -> list:
 def _value_violations(value, path) -> list:
     if not isinstance(value, str):
         return []
-    v = unicodedata.normalize("NFKC", value)
+    bad = _bad_chars(value)
     errs = []
+    if bad:
+        # 제로폭 한 글자로 아래 PII 정규식이 전부 무력화된다(Vex F1) — 먼저 거부.
+        errs.append(f"{path}: 값에 제어·서로게이트 문자 {bad} — 거부(PII 은닉 통로)")
+    v = unicodedata.normalize("NFKC", value)
     if len(v) > _MAX_STR:
         errs.append(f"{path}: 문자열 {len(v)}자 — 상한 {_MAX_STR}자 초과")
     for label, rx in _PII_VALUE_RES:
@@ -199,8 +243,12 @@ def find_identifier_violations(obj, _path="profile", _depth=0, _seen=None) -> li
 
 # ---------- 구조 검증 헬퍼 (전부 목록 반환, 예외 없음) ----------
 def _is_scalar(v) -> bool:
-    if isinstance(v, bool) or isinstance(v, int) or isinstance(v, str):
+    if isinstance(v, bool) or isinstance(v, str):
         return True
+    if isinstance(v, int):
+        # 2차 리뷰 Boundary F4: _MAX_STR이 정수로 우회됐다.
+        # 4,000자리 정수 하나가 4,012B — 키 예산의 61%.
+        return len(str(abs(v))) <= _MAX_INT_DIGITS
     if isinstance(v, float):
         return math.isfinite(v)   # NaN·Inf는 JSON 밖 — 직렬화 게이트(리뷰 F6)
     return False
@@ -209,14 +257,16 @@ def _is_scalar(v) -> bool:
 def _check_token(v, path, name) -> list:
     if not isinstance(v, str) or not TOKEN_RE.fullmatch(v):
         return [f"{path} {name}는 토큰 형식([a-z0-9_-] 1~32자) 문자열이어야 함 — "
-                f"현재 {type(v).__name__}"]
+                f"현재 {_redact(v)}"]
     return []
 
 
 def _check_keyname(v, path, name) -> list:
+    # v1은 거부한 값을 {v!r}로 그대로 찍었다 — device_type·setting_key는
+    # 공격자 통제 문자열이라 거부 메시지가 곧 PII 유출이었다(2차 리뷰 Vex F3).
     if not isinstance(v, str) or not KEY_RE.fullmatch(v):
         return [f"{path} {name}는 ASCII 소문자 키 형식이어야 함 — "
-                f"현재 {v!r}"]
+                f"현재 {_redact(v)}"]
     return []
 
 
@@ -224,7 +274,7 @@ def _check_dict_shape(obj, allowed, required, path) -> list:
     """dict 여부 + 미지 키 + 필수 키. dict가 아니면 그 사유만 반환."""
     if not isinstance(obj, dict):
         return [f"{path}가 객체가 아님({type(obj).__name__})"]
-    errs = [f"{path} 미지의 키: {k} — 조용한 확장 금지(NFR6)"
+    errs = [f"{path} 미지의 키: {_redact(k)} — 조용한 확장 금지(NFR6)"
             for k in obj if k not in allowed]
     errs += [f"{path} 필수 키 누락: {k}" for k in required if k not in obj]
     return errs
@@ -238,7 +288,12 @@ def _validate_top_level(profile) -> list:
     if "schema_version" in profile:
         v = profile["schema_version"]
         if not is_supported(v):
-            errs.append(f"지원하지 않는 스키마 버전: {v!r} "
+            # v1은 {v!r}로 무제한 에코했다 — 5MB 페이로드가 500만자 에러 문자열을
+            # 만들었고, 이 문자열은 PII 스캔을 한 번도 안 거친다(2차 리뷰 Vex F4).
+            # 버전처럼 생긴 것(숫자·영문·점)만 원문 노출. 하이픈이 섞이면
+            # '010-1234-5678'이 버전 자리에 실려 그대로 로그로 나간다.
+            shown = v if (isinstance(v, str) and _VERSION_SHOW_RE.fullmatch(v))                 else _redact(v)
+            errs.append(f"지원하지 않는 스키마 버전: {shown} "
                         f"(지원: {sorted(SUPPORTED_VERSIONS)})")
     return errs
 
@@ -262,7 +317,7 @@ def _validate_devices(devices):
         errs += tok
         if not tok:
             if ref in refs:
-                errs.append(f"{path} device_ref 중복: {ref!r} — "
+                errs.append(f"{path} device_ref 중복: {_redact(ref)} — "
                             f"복원 시 매칭이 비결정적이 됨")
             refs.add(ref)
         if "device_type" in d:
@@ -282,20 +337,24 @@ def _validate_settings(settings, refs) -> list:
     if not isinstance(settings, dict):
         return [f"settings는 객체여야 함({type(settings).__name__})"]
     errs = []
-    for ref, kv in settings.items():
-        path = f"settings[{ref!r}]"
-        errs += _check_token(ref, "settings", "키(device_ref)")
+    # 경로에 키 원문을 넣지 않는다 — settings 키는 사용자 통제 문자열이라
+    # 거부 메시지가 곧 PII 유출이었다(2차 리뷰 Vex F3·F6). 서수로 지목하면
+    # 진단은 되고 원문은 새지 않는다.
+    for idx, (ref, kv) in enumerate(settings.items()):
+        path = f"settings[#{idx}]"
+        errs += _check_token(ref, path, "키(device_ref)")
         if refs is not None and isinstance(ref, str) and TOKEN_RE.fullmatch(ref) \
                 and ref not in refs:
-            errs.append(f"settings의 device_ref {ref!r}가 devices에 없음")
+            errs.append(f"{path}의 device_ref {_redact(ref)}가 devices에 없음")
         if not isinstance(kv, dict):
             errs.append(f"{path}는 객체여야 함({type(kv).__name__})")
             continue
         for k, v in kv.items():
             errs += _check_keyname(k, path, "setting_key")
             if not _is_scalar(v):
-                errs.append(f"{path}.{k} 값은 스칼라(str/int/float/bool, "
-                            f"유한값)여야 함 — 현재 {type(v).__name__}")
+                errs.append(f"{path}.{_redact(k)} 값은 스칼라(str/int/float/bool, "
+                            f"유한값·자릿수 {_MAX_INT_DIGITS} 이내)여야 함 — "
+                            f"현재 {type(v).__name__}")
     return errs
 
 
@@ -360,7 +419,8 @@ def _validate_reserved_wellness(profile) -> list:
         return [f"reserved_wellness는 객체여야 함({type(rw).__name__})"]
     if rw:
         return ["reserved_wellness는 예약 필드 — 값을 담을 수 없다"
-                f"(NFR5: 진단·의료 판단 기능 배제). 발견된 키: {sorted(map(str, rw))}"]
+                f"(NFR5: 진단·의료 판단 기능 배제). 발견된 키 {len(rw)}개: "
+                f"{[_redact(k) for k in list(rw)[:3]]}"]
     return []
 
 

@@ -7,13 +7,14 @@
 
 리뷰 반영(2026-07-22): MIGRATIONS(아무도 읽지 않는 가변 전역) 표면에서 제거,
 SUPPORTED_VERSIONS(호출자가 읽을 정당한 이유가 있는 불변값) 추가, __all__ 명시.
+2차 리뷰 반영: make_sample_profile은 테스트·문서 생성 전용이라 제품 표면에서
+제외(home_profile.storage로 직접 접근). size_report는 (report, errors) 튜플 규약.
 """
 from .storage import (
     BLE_MTU,
     BUDGET_STORAGE_KEY,
     BUDGET_STORAGE_TOTAL,
     deserialize,
-    make_sample_profile,
     serialize,
     size_report,
 )
@@ -37,7 +38,6 @@ __all__ = [
     "find_identifier_violations",
     "is_supported",
     "deserialize",
-    "make_sample_profile",
     "new_profile",
     "serialize",
     "size_report",
