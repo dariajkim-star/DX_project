@@ -17,6 +17,12 @@ from .carrier import (
     CarrierStatus,
     MemoryCarrier,
 )
+from .routine import (
+    chunk,
+    execute_routine,
+    reassemble,
+    routine_to_commands,
+)
 from .storage import (
     BLE_MTU,
     BUDGET_PER_KEY,
@@ -50,7 +56,11 @@ __all__ = [
     "SCHEMA_VERSION",
     "SUPPORTED_VERSIONS",
     "TOP_LEVEL_KEYS",
+    "chunk",
+    "execute_routine",
     "find_identifier_violations",
+    "reassemble",
+    "routine_to_commands",
     "is_supported",
     "deserialize",
     "new_profile",
