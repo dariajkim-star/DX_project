@@ -21,7 +21,7 @@ DX_project/
 │  ├─ CX_DEFINITION.md        ← 주제·Pain Point·페르소나 확정본 (현재 상태)
 │  ├─ DECISIONS.md            ← 의사결정 인덱스 + 운영 원칙
 │  ├─ meetings/               ← 미팅 기록 (결정의 "왜")
-│  ├─ WORKFLOW.md             ← Mermaid 워크플로우 다이어그램 3종
+│  ├─ WORKFLOW.md             ← 워크플로우 다이어그램 5종 + §5 핵심 주장(AI 오케스트레이션)
 │  ├─ API_SPEC.md             ← 스크립트·파일 계약 명세
 │  └─ DEV_PLAN.md             ← 개발계획서 (이력 + 로드맵)
 ├─ dx_pipeline/               ← 원본 템플릿 (v2.1, 참고용 보존)
