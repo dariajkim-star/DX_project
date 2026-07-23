@@ -119,19 +119,18 @@ def main(argv=None) -> int:
     for _ref, _key, _val, job in _NIGHT_ACTIONS:
         _emit(f"  · {job}")
 
-    run = execute_routine
     if args.offline:
         import offline_guard
         try:
             with offline_guard.enforce_offline():
-                result, errs = run(carrier, transports, RECORD,
-                                   NIGHT_ROUTINE_INDEX, mtu=args.mtu)
+                result, errs = execute_routine(carrier, transports, RECORD,
+                                               NIGHT_ROUTINE_INDEX, mtu=args.mtu)
         except offline_guard.OfflineViolation as v:
             _emit(f"[{SIMULATOR_BANNER}] ⚠️ 오프라인 위반 탐지: {v}")
             return 1
     else:
-        result, errs = run(carrier, transports, RECORD,
-                           NIGHT_ROUTINE_INDEX, mtu=args.mtu)
+        result, errs = execute_routine(carrier, transports, RECORD,
+                                       NIGHT_ROUTINE_INDEX, mtu=args.mtu)
     if errs:
         _emit(f"[{SIMULATOR_BANNER}] 실행 실패: {errs[0]}")
         return 1
