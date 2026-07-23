@@ -30,6 +30,7 @@ from .relocate import (
     REASON_ROUTINE_UNMAPPABLE,
     map_to_new_home,
 )
+from .proximity import ProximityGuard, make_proximity_token
 from .residency import data_residency
 from .routine import (
     chunk,
@@ -75,6 +76,7 @@ __all__ = [
     "TOP_LEVEL_KEYS",
     "LOCAL_CONSENT_SCOPE",
     "NOT_REQUIRED",
+    "ProximityGuard",
     "REASON_CAPABILITY_UNSUPPORTED",
     "REASON_MAPPING_ABORTED",
     "REASON_NO_MATCHING_TYPE",
@@ -84,6 +86,7 @@ __all__ = [
     "data_residency",
     "execute_routine",
     "find_identifier_violations",
+    "make_proximity_token",
     "map_to_new_home",
     "onboard_local",
     "reassemble",
