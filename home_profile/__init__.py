@@ -17,6 +17,12 @@ from .carrier import (
     CarrierStatus,
     MemoryCarrier,
 )
+from .onboard import (
+    LOCAL_CONSENT_SCOPE,
+    NOT_REQUIRED,
+    consent_scope_violations,
+    onboard_local,
+)
 from .relocate import (
     REASON_CAPABILITY_UNSUPPORTED,
     REASON_MAPPING_ABORTED,
@@ -66,14 +72,18 @@ __all__ = [
     "SCHEMA_VERSION",
     "SUPPORTED_VERSIONS",
     "TOP_LEVEL_KEYS",
+    "LOCAL_CONSENT_SCOPE",
+    "NOT_REQUIRED",
     "REASON_CAPABILITY_UNSUPPORTED",
     "REASON_MAPPING_ABORTED",
     "REASON_NO_MATCHING_TYPE",
     "REASON_ROUTINE_UNMAPPABLE",
     "chunk",
+    "consent_scope_violations",
     "execute_routine",
     "find_identifier_violations",
     "map_to_new_home",
+    "onboard_local",
     "reassemble",
     "routine_to_commands",
     "is_supported",
