@@ -4,7 +4,7 @@ baseline_commit: d4d4465
 
 # Story 3.1: 재설치 후 무재등록 복원
 
-Status: review
+Status: done
 
 ## Story
 
@@ -128,6 +128,24 @@ Epic 1이 세운 온바디 저장(1.2)·캐리어 추상화(1.3) 위에 **복원
         "경쟁 2.0배 열위" 맥락과 함께 인용한다(NFR6)
   - [x] AC3와 FR7의 정합을 1줄로 명시: 복원이 클라우드를 안 쓰는 것은 곧
         "프로필 원본이 서버에 없다"(Epic 4 FR7)의 예고편 — 서사 연결 유지
+
+### Review Findings (code-review 2026-07-23 · 3 리뷰어 병렬 · Fable 5)
+
+- [x] [Review][Patch] `restore_from_carrier` — `routine_count` 무상한 → 복원 경로
+      메모리 고갈 DoS [home_profile/storage.py restore_from_carrier] — blind+edge
+      교차 확인(HIGH). meta의 routine_count에 상한 없이 `range(count)` 즉시 전개.
+      MAX_ROUTINES/MAX_DEVICES로 name 생성 전 거부. **적용됨**
+- [x] [Review][Patch] `merge_chunks` — meta.device_refs 밖 잉여 `device:*` 조각이
+      조용히 소실 [home_profile/storage.py merge_chunks] — "조용한 누락 금지" 위반.
+      consumed 집합 밖 조각 전부 거부로 정정. **적용됨**
+- [x] [Review][Patch] demo_reinstall.py docstring의 P-2 인용 패러프레이즈
+      [demo_reinstall.py:13] — 화면·대본은 원문 대조 완료였으나 docstring만 미적용.
+      CSV 원문 부분문자열로 정정. **적용됨**
+- [x] [Review][Defer] `merge_chunks` 반환이 입력 조각을 참조로 물고 나옴(aliasing)
+      [home_profile/storage.py merge_chunks] — deferred: 캐리어(주 경로)는 JSON
+      신선 객체라 무해, split_chunks도 동일 특성. deferred-work.md 등재
+- 오탐 3건 dismiss: `_settings:None` 비대칭·orphan settings 손실(유효 프로필
+      도달 불가 — settings 값은 dict 강제), bool routine_count 수용(무해)
 
 ## Dev Notes
 
@@ -269,7 +287,9 @@ Claude Fable 5 (claude-fable-5) — 2026-07-23
 - `tests/test_reinstall_restore.py` — 신규 (21 tests)
 - `docs/DEMO_SCRIPT.md` — 수정 (시연 순서 7 + §7 재설치 장면)
 - `docs/implementation-artifacts/3-1-reinstall-restore.md` — 본 파일
+- `docs/implementation-artifacts/deferred-work.md` — 신규 (code-review 이월: aliasing)
 - ※ `home_profile/schema.py`·`appliance_sim/` **무수정** — 기존 스키마·경계 유지
+  (storage.py는 schema에서 MAX_DEVICES/MAX_ROUTINES import만 추가)
 
 ### Change Log
 
@@ -280,3 +300,8 @@ Claude Fable 5 (claude-fable-5) — 2026-07-23
 - 2026-07-23: Story 3.1 구현 완료 — merge_chunks 왕복 무손실, 캐리어 복원
   (재등록 경로 구조적 부재), 데모·테스트 21개, P-2 인용 원문 대조.
   **317 passed** (신규 21, 회귀 0). Status: ready-for-dev → review.
+- 2026-07-23: code-review(3 리뷰어 병렬) 후 patch 3건 적용 — ①`restore_from_carrier`
+  routine_count 무상한 DoS를 MAX_ROUTINES/MAX_DEVICES 상한으로 차단(name 생성 전),
+  merge_chunks에도 동일 상한+bool 배제 ②meta 미참조 잉여 device 조각 거부(consumed
+  집합) ③demo docstring P-2 인용을 CSV 원문으로 정정. 회귀 테스트 6개 추가(총 27개).
+  aliasing 1건 defer(deferred-work.md). 오탐 3건 dismiss.

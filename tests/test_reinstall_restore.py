@@ -100,6 +100,48 @@ def test_merge_rejects_missing_meta():
     assert errs
 
 
+def test_merge_rejects_oversized_routine_count():
+    """code-review HIGH: routine_count 정수 증폭 DoS 방어. 위조 meta의 거대
+    routine_count를 range 전개 전에 거부한다(MAX_ROUTINES 상한)."""
+    from home_profile.schema import MAX_ROUTINES
+    chunks = {"meta": {"schema_version": SCHEMA_VERSION, "reserved_wellness": {},
+                       "device_refs": [], "routine_count": MAX_ROUTINES + 1}}
+    restored, errs = merge_chunks(chunks)
+    assert restored is None
+    assert errs
+
+
+def test_merge_rejects_oversized_device_count():
+    from home_profile.schema import MAX_DEVICES
+    refs = [f"dev{i:03d}" for i in range(MAX_DEVICES + 1)]
+    chunks = {"meta": {"schema_version": SCHEMA_VERSION, "reserved_wellness": {},
+                       "device_refs": refs, "routine_count": 0}}
+    restored, errs = merge_chunks(chunks)
+    assert restored is None
+    assert errs
+
+
+def test_merge_rejects_bool_routine_count():
+    """bool은 int 하위형이라 통과하던 것을 명시 배제(True가 1로 둔갑 금지)."""
+    chunks = split_chunks(make_sample_profile(1, 0))
+    chunks["meta"] = dict(chunks["meta"])
+    chunks["meta"]["routine_count"] = True
+    restored, errs = merge_chunks(chunks)
+    assert restored is None
+    assert errs
+
+
+def test_merge_rejects_unreferenced_device_chunk():
+    """code-review: meta.device_refs 밖의 잉여 device:* 조각이 조용히 소실되지
+    않고 거부된다(조용한 누락 금지)."""
+    chunks = split_chunks(make_sample_profile(2, 1))
+    chunks["device:ghost"] = {"device_ref": "ghost", "device_type": "light",
+                              "capabilities": ["power"]}
+    restored, errs = merge_chunks(chunks)
+    assert restored is None
+    assert errs
+
+
 def test_merge_never_raises_on_garbage():
     """예외 금지 계약(1.1 리뷰 F3 계보) — 어떤 입력에도 (None, errors)."""
     for garbage in (None, 42, "chunks", [], {"meta": None},
@@ -151,6 +193,34 @@ def test_reinstall_scenario_no_reregistration():
     assert restored == original
     assert {d["device_ref"] for d in restored["devices"]} == \
            {d["device_ref"] for d in original["devices"]}
+
+
+def test_restore_rejects_oversized_routine_count_in_carrier():
+    """code-review HIGH: 위조 meta가 캐리어에 심겼을 때 restore_from_carrier가
+    name 생성(range 전개) 전에 거부한다 — 워치급 메모리 고갈 차단."""
+    import json
+
+    from home_profile.schema import MAX_ROUTINES
+    carrier = MemoryCarrier()
+    forged = {"schema_version": SCHEMA_VERSION, "reserved_wellness": {},
+              "device_refs": [], "routine_count": MAX_ROUTINES * 10_000_000}
+    payload = json.dumps(forged, ensure_ascii=False,
+                         separators=(",", ":")).encode("utf-8")
+    assert len(payload) < 200                       # 상한 우회하는 작은 payload
+    assert carrier.put_records({"meta": payload}) == []
+    restored, errs = restore_from_carrier(carrier)   # 즉시 반환해야 함(행 없음)
+    assert restored is None
+    assert errs
+
+
+def test_persist_restore_empty_profile_via_carrier():
+    """빈 프로필의 캐리어 왕복 — restore의 `if names:` False 분기 커버."""
+    p = make_sample_profile(0, 0)
+    carrier = MemoryCarrier()
+    assert persist_to_carrier(p, carrier) == []
+    restored, errs = restore_from_carrier(carrier)
+    assert errs == []
+    assert restored == p
 
 
 def test_restore_from_empty_carrier_fails_closed():

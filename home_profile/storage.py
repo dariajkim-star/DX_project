@@ -28,6 +28,8 @@ import math
 
 from .schema import (
     _VERSION_SHOW_RE,
+    MAX_DEVICES,
+    MAX_ROUTINES,
     SCHEMA_VERSION,
     new_profile,
     validate_profile,
@@ -285,8 +287,15 @@ def merge_chunks(chunks):
         if not isinstance(refs, list):
             return None, ["meta.device_refs가 목록이 아님 — 복원 불가"]
         routine_count = meta.get("routine_count")
-        if not isinstance(routine_count, int) or routine_count < 0:
+        # bool은 int의 하위형이라 isinstance를 통과한다 — 명시 배제(True/False가
+        # 개수로 둔갑하지 않게). 스키마 상한(MAX_DEVICES/MAX_ROUTINES)을 병합에도
+        # 강제한다: 유효 프로필은 이미 이 상한 안이고, 상한 밖 meta는 와이어 위조다.
+        if isinstance(routine_count, bool) or not isinstance(routine_count, int) \
+                or routine_count < 0:
             return None, ["meta.routine_count가 음이 아닌 정수가 아님 — 복원 불가"]
+        if len(refs) > MAX_DEVICES or routine_count > MAX_ROUTINES:
+            return None, [f"복원 규모 초과: 기기 {len(refs)}/{MAX_DEVICES}, "
+                          f"루틴 {routine_count}/{MAX_ROUTINES} — 거부"]
 
         errs = []
         profile = {
@@ -323,12 +332,16 @@ def merge_chunks(chunks):
                     break
                 profile["routines"].append(chunks[key])
 
-        # 알 수 없는 조각 종류는 조용히 버리지 않는다.
+        # meta가 참조하지 않는 조각은 조용히 버리지 않는다 — 미지 종류뿐 아니라
+        # device_refs 밖의 잉여 device:* 조각까지 거부한다(그렇지 않으면 접두사만
+        # 맞는 잉여 조각이 검사를 통과하고 편입도 안 된 채 소멸한다). consumed는
+        # 상한(위)으로 이미 유계라 집합 구성이 폭발하지 않는다.
+        consumed = ({"meta"}
+                    | {f"device:{r}" for r in refs}
+                    | {f"routine:{i}" for i in range(routine_count)})
         for k in chunks:
-            if k != "meta" and not (isinstance(k, str) and
-                                    (k.startswith("device:") or
-                                     k.startswith("routine:"))):
-                errs.append(f"알 수 없는 조각 종류 — 거부"
+            if k not in consumed:
+                errs.append(f"참조되지 않은/미지 조각 — 거부"
                             f"({type(k).__name__} len={len(str(k))})")
 
         if errs:
@@ -389,8 +402,15 @@ def restore_from_carrier(carrier):
             return None, errs
         refs = meta_obj.get("device_refs")
         count = meta_obj.get("routine_count")
-        if not isinstance(refs, list) or not isinstance(count, int) or count < 0:
+        if not isinstance(refs, list) or isinstance(count, bool) \
+                or not isinstance(count, int) or count < 0:
             return None, ["meta 조각이 병합 계약을 만족하지 않음 — 복원 불가"]
+        # 상한을 name 생성 **전에** 강제한다 — 이 검사가 없으면 위조 meta의
+        # routine_count(수십 바이트 payload로 MAX_WIRE_BYTES를 통과) 하나가
+        # range(count)를 즉시 전개시켜 워치급 메모리를 고갈시킨다(정수 증폭 DoS).
+        if len(refs) > MAX_DEVICES or count > MAX_ROUTINES:
+            return None, [f"복원 규모 초과: 기기 {len(refs)}/{MAX_DEVICES}, "
+                          f"루틴 {count}/{MAX_ROUTINES} — 파싱 전 거부"]
 
         names = ([f"device:{r}" for r in refs] +
                  [f"routine:{i}" for i in range(count)])
