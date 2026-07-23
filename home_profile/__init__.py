@@ -30,6 +30,7 @@ from .relocate import (
     REASON_ROUTINE_UNMAPPABLE,
     map_to_new_home,
 )
+from .residency import data_residency
 from .routine import (
     chunk,
     execute_routine,
@@ -80,6 +81,7 @@ __all__ = [
     "REASON_ROUTINE_UNMAPPABLE",
     "chunk",
     "consent_scope_violations",
+    "data_residency",
     "execute_routine",
     "find_identifier_violations",
     "map_to_new_home",
