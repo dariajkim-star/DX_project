@@ -17,6 +17,12 @@ from .carrier import (
     CarrierStatus,
     MemoryCarrier,
 )
+from .relocate import (
+    REASON_CAPABILITY_UNSUPPORTED,
+    REASON_NO_MATCHING_TYPE,
+    REASON_ROUTINE_UNMAPPABLE,
+    map_to_new_home,
+)
 from .routine import (
     chunk,
     execute_routine,
@@ -59,9 +65,13 @@ __all__ = [
     "SCHEMA_VERSION",
     "SUPPORTED_VERSIONS",
     "TOP_LEVEL_KEYS",
+    "REASON_CAPABILITY_UNSUPPORTED",
+    "REASON_NO_MATCHING_TYPE",
+    "REASON_ROUTINE_UNMAPPABLE",
     "chunk",
     "execute_routine",
     "find_identifier_violations",
+    "map_to_new_home",
     "reassemble",
     "routine_to_commands",
     "is_supported",
