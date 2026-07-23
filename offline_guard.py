@@ -20,7 +20,8 @@ import socket
 import subprocess
 import urllib.request
 
-__all__ = ["OfflineViolation", "enforce_offline", "is_active"]
+__all__ = ["OfflineViolation", "enforce_offline", "is_active",
+           "blocking_installed"]
 
 
 class OfflineViolation(BaseException):
@@ -45,8 +46,21 @@ _saved = []          # [(module, name, original), ...]
 
 
 def is_active() -> bool:
-    """현재 오프라인 강제가 활성인지."""
+    """현재 오프라인 강제가 활성인지 — **카운터 기준**."""
     return _depth > 0
+
+
+def blocking_installed() -> bool:
+    """차단이 **실제로 설치돼 있는지** — 카운터가 아니라 함수 실체를 확인한다.
+
+    리뷰(2026-07-22, Mary): `is_active()`는 `_depth > 0`만 본다. 종단 테스트가
+    "하네스 활성"을 그것으로 확인했는데, 카운터가 1이어도 blocker가 무력화돼
+    있으면 여전히 True를 낸다 — "카운터 언급"이지 "차단 확인"이 아니다
+    (1.1 '단어 언급 단언 금지'의 사촌). 이 함수는 대상 함수가 우리 blocker로
+    바뀌어 있는지를 정체(identity)로 검사한다."""
+    if _depth == 0:
+        return False
+    return all(getattr(m, n).__name__ == "_blocker" for m, n in _TARGETS)
 
 
 def _make_blocker(label: str):
@@ -62,10 +76,26 @@ class _EnforceOffline:
     def __enter__(self):
         global _depth
         if _depth == 0:
+            # 원자적으로 설치한다 (리뷰 2026-07-22, Winston):
+            # v1은 setattr 루프 중간에 예외가 나면 일부만 막힌 채 _depth가 0으로
+            # 남아 __exit__이 영영 불리지 않았다 — 시험 장비가 자기 실패에서
+            # 빠져나오지 못하고 프로세스를 오염시켰다. put_records를 원자화한
+            # 것과 같은 원리(오늘 P1): 먼저 전부 읽어 스테이징하고, 그 다음
+            # 한꺼번에 적용하되 적용 중 실패하면 이미 바꾼 것을 되돌린다.
+            staged = [(m, n, getattr(m, n)) for m, n in _TARGETS]
+            applied = []
+            try:
+                for module, name, _original in staged:
+                    setattr(module, name,
+                            _make_blocker(f"{module.__name__}.{name}"))
+                    applied.append((module, name))
+            except BaseException:
+                for module, name, original in staged:
+                    if (module, name) in applied:
+                        setattr(module, name, original)
+                raise
             _saved.clear()
-            for module, name in _TARGETS:
-                _saved.append((module, name, getattr(module, name)))
-                setattr(module, name, _make_blocker(f"{module.__name__}.{name}"))
+            _saved.extend(staged)
         _depth += 1
         return self
 

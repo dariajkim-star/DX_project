@@ -88,9 +88,18 @@ def main(argv=None) -> int:
     # "부를 수 없다"(2.3). 위반은 OfflineViolation(BaseException)으로 터진다.
     if args.offline:
         import offline_guard
-        with offline_guard.enforce_offline():
-            result, errs = execute_routine(carrier, transports, RECORD,
-                                           args.routine, mtu=args.mtu)
+        try:
+            with offline_guard.enforce_offline():
+                result, errs = execute_routine(carrier, transports, RECORD,
+                                               args.routine, mtu=args.mtu)
+        except offline_guard.OfflineViolation as v:
+            # 하네스는 던지고(fail-loud), 데모는 우아하게 보인다
+            # (리뷰 2026-07-22, Sally): 발표 중 날 트레이스백은 "데모 터짐"으로
+            # 읽힌다. 위반 탐지야말로 하네스가 하는 일이므로 그렇게 표시한다.
+            # 시연부(_offline_preamble)와 같은 표현으로 일관되게.
+            _emit(f"[{SIMULATOR_BANNER}] ⚠️ 오프라인 위반 탐지: {v}")
+            _emit("  이것이 하네스가 하는 일이다 — 차단 중 네트워크 접근은 거부된다")
+            return 1
     else:
         result, errs = execute_routine(carrier, transports, RECORD,
                                        args.routine, mtu=args.mtu)

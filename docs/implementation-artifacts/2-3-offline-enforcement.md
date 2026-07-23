@@ -4,7 +4,7 @@ baseline_commit: e081729
 
 # Story 2.3: 오프라인 강제 검증
 
-Status: review
+Status: done
 
 ## Story
 
@@ -305,6 +305,44 @@ Claude Opus 4.8 (claude-opus-4-8) — 2026-07-22
   하네스(감시→차단), 차단 상태 종단 동등성, 차단 시연 화면·그 한계, 대비 자료
   틀(ThinQ 미측정), 발표 시연 절차서. **278 passed** (신규 20, 회귀 0).
   Status: ready-for-dev → review.
+- 2026-07-22: 파티 코드리뷰 5건 중 4건 반영 — `__enter__` 원자화(R1),
+  `blocking_installed()` 실체 검사(R2), 데모 위반 우아 표시(R3), 증거 문서
+  모듈-속성 한계 명시(R4). R5(청킹 위치)는 이월. **283 passed**.
+  Status: review → done.
+
+### 파티 리뷰 (2026-07-22) — Paige·Winston·Mary·Sally·Amelia·John
+
+5건 도출, **4건 즉시 반영 + 1건 이월**. 283 passed (신규 5).
+
+- [x] **R1 (Winston) `__enter__` 비원자적** — setattr 루프 중간에 실패하면 일부만
+      막힌 채 `_depth`가 0으로 남아 `__exit__`이 영영 안 불렸다. **시험 장비가
+      자기 실패에서 못 빠져나와 프로세스를 오염**시켰다(오늘 P1 put_records
+      원자화와 같은 원리). → 스테이징 후 일괄 적용, 적용 중 실패 시 이미 바꾼
+      것을 되돌림. `test_enter_is_atomic_on_failure`
+- [x] **R2 (Mary) 종단 테스트의 '활성 확인'이 카운터만 봄** — `is_active()`는
+      `_depth > 0`만 본다. blocker가 무력화돼도 True를 내므로 "카운터 언급"이지
+      "차단 확인"이 아니다(1.1 '단어 언급 단언'의 사촌). → `blocking_installed()`
+      추가(차단 함수의 실체를 identity로 검사), 종단 테스트가 그것을 보게 교체.
+      `test_blocking_installed_distinguishes_from_counter`
+- [x] **R3 (Sally) 데모 실행 본체의 위반이 날 트레이스백** — 시연부
+      (`_offline_preamble`)는 위반을 잡아 우아하게 보이는데 실행 본체는 안 잡아
+      **발표 중 빨간 트레이스백**이 뜬다("데모 터짐"으로 읽힘). → 본체도 잡아
+      "⚠️ 오프라인 위반 탐지 — 이것이 하네스가 하는 일"로 표시(하네스는 던지고
+      데모는 우아하게). `test_demo_offline_violation_shown_gracefully`
+- [x] **R4 (Paige) 승격된 주장의 새 한계가 문서에 없음** — `offline_guard`는
+      **모듈 속성**만 갈아끼운다. `from socket import socket`으로 사전 바인딩한
+      코드는 막히지 않는다. 즉 "부를 수 없다"가 아니라 **"모듈 속성으로 부르면
+      못 부른다"**이다 — 2.2 AST 한계와 같은 계열인데 `OFFLINE_EVIDENCE.md`가
+      말 안 했다. → 한계 명시(우리 코드는 전부 `socket.socket()`이라 현재 무사).
+      `test_evidence_doc_states_module_attribute_limit`
+
+- [ ] **R5 (Amelia·Winston) `chunk`/`reassemble`이 잘못된 집 — 이월**
+      `appliance_sim/transports/loopback.py`가 `home_profile.routine`을 import해
+      `reassemble`을 쓴다. 청킹은 프로필의 것도 가전의 것도 아니라 **전송 계층의
+      것**인데 `home_profile`에 산다. **이월 사유**: 올바른 위치는 Epic 3(저장
+      매체 교체)이나 실기기 전송이 붙을 때 드러난다. 지금 옮기면 소비자 없이
+      결정하는 것(함정 7 — 오늘 다섯 번째). 2.2에서 명령 형식 위치를 미룬 빚과
+      같은 자리다.
 
 ### 사람 결정 대기 (1건)
 

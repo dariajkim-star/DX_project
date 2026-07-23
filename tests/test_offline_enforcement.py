@@ -197,6 +197,90 @@ def test_guard_is_not_a_stub():
     assert blocked == 0
 
 
+def test_enter_is_atomic_on_failure(monkeypatch):
+    """리뷰 회귀 고정(Winston): `__enter__`가 setattr 도중 실패하면
+    **이미 바꾼 것을 되돌린다** — 절반만 막힌 채 프로세스를 오염시키지 않는다.
+    v1은 이 경우 _depth가 0으로 남아 __exit__이 영영 불리지 않았다."""
+    import subprocess
+
+    originals = {(m, n): getattr(m, n) for m, n in offline_guard._TARGETS}
+
+    # subprocess.run에 setattr을 시도하면 터지게 만든다(마지막 타겟 부근)
+    real_setattr = offline_guard.setattr if hasattr(offline_guard, "setattr") else setattr
+    calls = {"n": 0}
+
+    def exploding_setattr(obj, name, value):
+        calls["n"] += 1
+        if calls["n"] == 3:                       # 세 번째 설치에서 실패
+            raise RuntimeError("주입된 실패")
+        real_setattr(obj, name, value)
+
+    monkeypatch.setattr(offline_guard, "setattr", exploding_setattr, raising=False)
+    # offline_guard가 setattr을 전역으로 쓰므로 builtins 경유로 주입
+    import builtins
+    monkeypatch.setattr(builtins, "setattr", exploding_setattr)
+
+    with pytest.raises(RuntimeError):
+        with offline_guard.enforce_offline():
+            pass
+
+    monkeypatch.undo()
+    # 모든 타겟이 원본으로 복구돼 있어야 한다 (부분 설치 잔존 없음)
+    for (m, n), orig in originals.items():
+        assert getattr(m, n) is orig, f"{m.__name__}.{n} 미복구"
+    assert not offline_guard.is_active()
+
+
+def test_blocking_installed_distinguishes_from_counter():
+    """리뷰 회귀 고정(Mary): blocking_installed()는 카운터가 아니라 차단 함수의
+    실체를 본다. 비활성이면 False, 활성이면 실제 blocker가 설치돼 있어야 True."""
+    assert not offline_guard.blocking_installed()
+    with offline_guard.enforce_offline():
+        assert offline_guard.is_active()
+        assert offline_guard.blocking_installed()
+        # blocker를 몰래 무력화하면 카운터는 여전히 활성이지만 설치는 거짓이 된다
+        saved = socket.socket
+        socket.socket = lambda *a, **k: None
+        try:
+            assert offline_guard.is_active()          # 카운터는 속는다
+            assert not offline_guard.blocking_installed()  # 실체 검사는 안 속는다
+        finally:
+            socket.socket = saved
+    assert not offline_guard.blocking_installed()
+
+
+def test_demo_offline_violation_shown_gracefully(capsys, monkeypatch):
+    """리뷰 회귀 고정(Sally): 데모 실행 본체에서 위반이 나면 날 트레이스백이
+    아니라 우아한 메시지로 보인다. 하네스는 던지고(fail-loud) 데모는 잡아 보인다."""
+    import demo_routine
+
+    def raising_execute(*a, **k):
+        raise offline_guard.OfflineViolation("주입된 위반: socket.socket")
+
+    monkeypatch.setattr(demo_routine, "execute_routine", raising_execute)
+    rc = demo_routine.main(["--offline"])
+    out = capsys.readouterr().out
+    assert rc == 1                                    # 위반은 실패로 끝난다
+    assert "오프라인 위반 탐지" in out                # 트레이스백이 아니라 메시지
+    assert "하네스가 하는 일" in out
+    assert "Traceback" not in out                     # 날것이 아니다
+
+
+def test_demo_normal_offline_has_no_violation(capsys):
+    """정상 경로는 위반 없이 완주한다 — 위 테스트가 '아무거나 잡음'이 아님을 대조."""
+    from demo_routine import main
+    assert main(["--offline"]) == 0
+    assert "위반 탐지" not in capsys.readouterr().out
+
+
+def test_evidence_doc_states_module_attribute_limit():
+    """리뷰 회귀 고정(Paige): 승격된 주장의 새 한계('모듈 속성만 막는다')가
+    증거 문서에 적혀 있다 — 2.2 AST 병의 재발 방지."""
+    doc = (ROOT / "docs" / "OFFLINE_EVIDENCE.md").read_text(encoding="utf-8")
+    assert "모듈 속성" in doc
+    assert "from socket import" in doc
+
+
 def test_violation_not_swallowed_by_product_code(profile):
     """제품 코드의 `except Exception`이 위반을 흡수하면 이 스토리가 무의미하다.
     fail-closed가 여기서는 함정이 된다 — 위반은 반드시 밖으로 나와야 한다."""
@@ -234,7 +318,9 @@ def test_offline_result_identical_to_online(profile):
     '둘 다 성공'은 약한 단언 — 최종 상태·이벤트가 같은지 본다."""
     online = _run_once(profile)
     with offline_guard.enforce_offline():
-        assert offline_guard.is_active()          # 하네스가 실제로 활성인지 확인
+        # 카운터가 아니라 **차단이 실제로 설치됐는지**로 확인한다 (리뷰 Mary):
+        # is_active()는 _depth만 보므로 blocker가 무력화돼도 True를 낸다.
+        assert offline_guard.blocking_installed()
         offline = _run_once(profile)
 
     on_result, on_errs, on_snap, on_ev = online
