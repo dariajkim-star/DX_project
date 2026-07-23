@@ -13,3 +13,7 @@ dx_pipeline_v2.2/out/
 
 # ThinQ Village 실행 이력 (LLM 응답 원문 포함)
 out_panel/
+
+# bmad 프로젝트별 설치 + 스킬 — 로컬 전용, 저장소에 포함하지 않음
+_bmad/
+.claude/
