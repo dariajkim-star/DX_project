@@ -244,9 +244,12 @@ def execute_routine(carrier, transports, record_name, routine_index, mtu=20):
     만지면 캐리어 중립(NFR3)이 이 스토리에서 무효화되고, Epic 3(재설치 복원)이
     저장 매체를 바꿀 때 이 경로가 죽는다.
 
-    transports: {device_ref: 전송객체}. 전송객체는 `deliver(bytes) -> errors`만
-    있으면 된다 — 루프백이든 BLE든 같은 코드가 돈다. 그게 2.3에서 네트워크를
-    끊어도 같은 경로임을 보이는 근거다.
+    transports: {device_ref: 전송객체}. 전송객체가 `deliver_chunks(list[bytes])`를
+    가지면 **청크를 그대로 넘겨 수신 측이 재조립**한다(2.3, 무선 구간의 실제
+    구조). 없으면 `deliver(bytes)`(2.1 계약)로 폴백하되 **어느 경로였는지
+    결과의 `reassembled_by`에 남긴다** — 조용한 분기 금지.
+    루프백이든 BLE든 같은 코드가 돈다. 그게 2.3에서 네트워크를 끊어도 같은
+    경로임을 보이는 근거다.
     """
     try:
         if carrier is None:
@@ -274,20 +277,31 @@ def execute_routine(carrier, transports, record_name, routine_index, mtu=20):
             return None, [f"전송 대상 없음: 기기 {len(missing)}대"]
 
         chunks_sent = 0
+        reassembled_by = None
         for cmd in commands:
             data = _encode(cmd)
             pieces, errs = chunk(data, mtu)
             if errs:
                 return None, errs          # 사유를 그대로 전파(뭉개지 않는다)
-            # 전송 계층은 완성된 bytes 1개를 받는다(2.1 계약). 청크는 무선
-            # 구간의 표현이므로 여기서 재조립해 넘긴다 — 실기기에서는 이
-            # 재조립이 수신 측(워치 펌웨어/가전)에서 일어난다.
-            restored, errs = reassemble(pieces)
+            transport = transports[cmd["device_ref"]]
+            if hasattr(transport, "deliver_chunks"):
+                # 수신 측 재조립 — 무선 구간의 실제 구조 (2.3, R5 해소)
+                errs = transport.deliver_chunks(pieces)
+                by = "receiver"
+            else:
+                # 구형 전송 폴백: 송신 측이 붙여서 완성본을 넘긴다 (2.1 계약).
+                # 무선 구간은 시뮬레이션되지 않는다 — 그 사실을 결과에 남긴다.
+                restored, errs = reassemble(pieces)
+                if errs:
+                    return None, errs
+                errs = transport.deliver(restored)
+                by = "sender"
             if errs:
                 return None, errs
-            errs = transports[cmd["device_ref"]].deliver(restored)
-            if errs:
-                return None, errs
+            # 혼재는 조용히 넘기지 않는다 — 한 실행은 한 경로여야 한다
+            if reassembled_by is not None and by != reassembled_by:
+                return None, ["전송 경로 혼재 — 일부는 청크, 일부는 완성본"]
+            reassembled_by = by
             chunks_sent += len(pieces)
 
         return {
@@ -304,6 +318,9 @@ def execute_routine(carrier, transports, record_name, routine_index, mtu=20):
             "devices_commanded": len(commands),
             "chunks_sent": chunks_sent,
             "mtu": mtu,
+            # 수신 측 재조립(2.3)인지 송신 측 폴백(2.1 구형 전송)인지 —
+            # 무선 구간이 시뮬레이션됐는지를 데모·발표가 정직하게 말하는 근거.
+            "reassembled_by": reassembled_by,
         }, []
     except Exception as e:   # fail-closed
         return None, [f"루틴 실행 내부 오류({type(e).__name__}) — 거부"]
