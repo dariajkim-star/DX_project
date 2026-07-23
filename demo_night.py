@@ -151,6 +151,7 @@ def main(argv=None) -> int:
           f"재조립 {result['reassembled_by']}")
     if args.offline:
         _emit("오프라인 강제 완료 — 잠들기 전, 네트워크 없이, 손목만으로 성공했다")
+        _emit("  SPOF(클라우드 단일 장애점) 제거 — LG 자기약속 'Effortless'의 실현")
     _emit(f"Job 실현: \"{JOB}\"")
     _emit(f"[{SIMULATOR_BANNER}] — 이 산출물은 실가전 데이터가 아니다")
     return 0
