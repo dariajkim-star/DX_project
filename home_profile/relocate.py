@@ -34,12 +34,13 @@ schema·carrier·storage를 수정하지 않는다.
 """
 import copy
 
-from .schema import new_profile, validate_profile
+from .schema import MAX_CAPABILITIES_PER_DEVICE, MAX_DEVICES, new_profile, validate_profile
 
 __all__ = [
     "REASON_NO_MATCHING_TYPE",
     "REASON_CAPABILITY_UNSUPPORTED",
     "REASON_ROUTINE_UNMAPPABLE",
+    "REASON_MAPPING_ABORTED",
     "map_to_new_home",
 ]
 
@@ -47,6 +48,7 @@ __all__ = [
 REASON_NO_MATCHING_TYPE = "no_matching_type"          # 같은 type의 새 기기 없음
 REASON_CAPABILITY_UNSUPPORTED = "capability_unsupported"  # 설정 키를 새 기기가 미지원
 REASON_ROUTINE_UNMAPPABLE = "routine_action_unmappable"   # 루틴 액션 이전 불가
+REASON_MAPPING_ABORTED = "mapping_aborted"            # 매핑 중단(무효 입력·결과 무효)
 
 
 def _empty_report():
@@ -70,26 +72,38 @@ def map_to_new_home(old_profile, new_devices):
     try:
         errs = validate_profile(old_profile)
         if errs:
+            # 옛 프로필 자체가 무효 — 계상할 '옛 항목'이 정의되지 않는다.
             report["errors"].append("옛 프로필이 유효하지 않음 — 매핑 불가")
             return None, report
+        # ↓ 여기부터 old_profile은 유효하다. 아래의 모든 하드 실패는 옛 항목
+        #   전체를 held로 계상하는 _abort로 반환한다 — 실패 경로에서도 누락 0
+        #   항등식(old == transferred + held)이 성립하고, 리포트가 거짓 이전을
+        #   말하지 않게 한다(GPT 리뷰 High-1·High-2).
         if not isinstance(new_devices, list):
-            report["errors"].append(
-                f"new_devices는 목록이어야 함({type(new_devices).__name__})")
-            return None, report
+            return _abort(old_profile,
+                          f"new_devices는 목록이어야 함({type(new_devices).__name__}) — 매핑 중단")
+        # 상한을 매핑·deepcopy 전에 강제한다 — 그렇지 않으면 거대 입력을 전부
+        # 순회·복제한 뒤에야 최종 검증에서 거부한다(3.1 리뷰 계보의 자원 고갈).
+        if len(new_devices) > MAX_DEVICES:
+            return _abort(old_profile,
+                          f"새 기기 {len(new_devices)}개 — 상한 {MAX_DEVICES} 초과, 매핑 전 거부")
 
         # 새 기기를 device_type별로 묶는다(입력 순서 보존 — 결정성). 각 기기의
         # 사용 여부와 capability 집합을 함께 들고 다닌다.
         new_by_type = {}
         for dev in new_devices:
             if not isinstance(dev, dict):
-                report["errors"].append(
-                    f"새 기기 항목이 dict가 아님({type(dev).__name__})")
-                return None, report
+                return _abort(old_profile,
+                              f"새 기기 항목이 dict가 아님({type(dev).__name__}) — 매핑 중단")
+            caps_list = dev.get("capabilities")
+            if isinstance(caps_list, list) and len(caps_list) > MAX_CAPABILITIES_PER_DEVICE:
+                return _abort(old_profile,
+                              f"새 기기 capability {len(caps_list)}개 — 상한 "
+                              f"{MAX_CAPABILITIES_PER_DEVICE} 초과, 매핑 전 거부")
             dtype = dev.get("device_type")
             new_by_type.setdefault(dtype, []).append(
                 {"dev": dev, "used": False,
-                 "caps": set(dev.get("capabilities", []))
-                         if isinstance(dev.get("capabilities"), list) else set()})
+                 "caps": set(caps_list) if isinstance(caps_list, list) else set()})
 
         old_settings = old_profile.get("settings", {})
         old_settings = old_settings if isinstance(old_settings, dict) else {}
@@ -157,20 +171,55 @@ def map_to_new_home(old_profile, new_devices):
         result["settings"] = new_settings
         result["routines"] = new_routines
 
-        # 설정을 못 받은 새 기기는 침묵하지 않는다(역방향 누락 금지).
+        # 옛 기기와 매칭되지 않은 새 기기는 침묵하지 않는다(역방향 누락 금지).
+        # ⚠️ 판정 기준은 '설정을 받았는가'가 아니라 '옛 기기가 배정됐는가'다 —
+        # 매칭됐지만 설정이 없는 새 기기(옛 설정 0·전부 미지원)를 unmatched로
+        # 오보하지 않는다(GPT 리뷰 Med-3).
+        matched_new_refs = {slot["dev"].get("device_ref")
+                            for slots in new_by_type.values()
+                            for slot in slots if slot["used"]}
         for dev in new_devices:
             ref = dev.get("device_ref")
-            if ref not in new_settings:
+            if ref not in matched_new_refs:
                 report["unmatched_new"].append(ref)
 
         errs = validate_profile(result)              # 결과 유효성 강제
         if errs:
-            report["errors"].append("매핑 결과가 유효하지 않음 — 거부")
-            return None, report
+            # 결과가 무효면 이 매핑은 성립하지 않는다 — 누적한 transferred는
+            # 거짓이 되므로 폐기하고, 옛 항목 전체를 보류로 계상한다(High-2).
+            return _abort(old_profile, "매핑 결과가 유효하지 않음 — 거부")
         return result, report
     except Exception as e:   # fail-closed
         report["errors"].append(f"매핑 내부 오류({type(e).__name__}) — 거부")
         return None, report
+
+
+def _abort(old_profile, error_msg):
+    """유효한 old_profile에 대한 하드 실패·결과 무효 반환. (None, report).
+
+    transferred는 비우고 옛 항목(기기·설정 키·루틴) 전체를 held로 계상한다 —
+    실패 경로에서도 "옛 항목 = transferred + held" 항등식이 성립하고, 리포트가
+    성립하지 않은 이전을 말하지 않게 한다(GPT 리뷰 High-1·High-2).
+    호출 전 validate_profile(old_profile)이 통과했으므로 구조를 신뢰한다."""
+    report = _empty_report()
+    report["errors"].append(error_msg)
+    for dev in old_profile.get("devices", []):
+        report["held"].append({"kind": "device",
+                               "reason": REASON_MAPPING_ABORTED,
+                               "device_type": dev.get("device_type")})
+    settings = old_profile.get("settings", {})
+    if isinstance(settings, dict):
+        for kv in settings.values():
+            if isinstance(kv, dict):
+                for key in kv:
+                    report["held"].append({"kind": "setting",
+                                           "reason": REASON_MAPPING_ABORTED,
+                                           "setting_key": key})
+    for idx in range(len(old_profile.get("routines", []))):
+        report["held"].append({"kind": "routine",
+                               "reason": REASON_MAPPING_ABORTED,
+                               "routine_index": idx})
+    return None, report
 
 
 def _first_unused(slots):

@@ -19,6 +19,7 @@ from .carrier import (
 )
 from .relocate import (
     REASON_CAPABILITY_UNSUPPORTED,
+    REASON_MAPPING_ABORTED,
     REASON_NO_MATCHING_TYPE,
     REASON_ROUTINE_UNMAPPABLE,
     map_to_new_home,
@@ -66,6 +67,7 @@ __all__ = [
     "SUPPORTED_VERSIONS",
     "TOP_LEVEL_KEYS",
     "REASON_CAPABILITY_UNSUPPORTED",
+    "REASON_MAPPING_ABORTED",
     "REASON_NO_MATCHING_TYPE",
     "REASON_ROUTINE_UNMAPPABLE",
     "chunk",

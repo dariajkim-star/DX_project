@@ -227,6 +227,58 @@ def test_result_has_no_aliasing_with_inputs():
     assert new_devices[0]["device_type"] == "air_conditioner"
 
 
+# ---------- GPT code-review 회귀 (실패 경로 진실성) ----------
+
+def test_invalid_new_devices_still_accounts_for_every_old_item():
+    """[High-1] new_devices 무효(None)여도 옛 항목 전부가 held로 계상된다 —
+    누락 0 항등식은 하드 실패 경로에서도 성립한다."""
+    old = _old_home()
+    result, report = map_to_new_home(old, None)
+    assert result is None
+    assert report["errors"]
+    assert report["transferred"]["devices"] == []       # 팬텀 이전 없음
+    assert _identity_holds(old, report)                  # old == 0 + held(전부)
+
+
+def test_failed_result_validation_does_not_report_phantom_transfers():
+    """[High-2] 최종 검증 실패 시 transferred가 남으면 리포트가 거짓말이 된다."""
+    old = _old_home()
+    new_devices = [
+        _dev("bad ref!", "air_conditioner", ["power", "target_temp"]),  # 토큰 위반
+        _dev("new_cleaner", "robot_cleaner", ["power"]),
+    ]
+    result, report = map_to_new_home(old, new_devices)
+    assert result is None                                # 결과 무효로 거부
+    assert report["transferred"]["devices"] == []        # 팬텀 이전 없음
+    assert report["transferred"]["setting_keys"] == 0
+    assert report["errors"]
+    assert _identity_holds(old, report)
+
+
+def test_matched_device_without_settings_is_not_unmatched_new():
+    """[Med-3] 매칭됐지만 설정이 없는 새 기기는 unmatched_new가 아니다."""
+    old = new_profile()
+    old["devices"] = [_dev("old_light", "light", ["power"])]
+    old["settings"] = {}                                 # 설정 없음
+    assert validate_profile(old) == []
+    new_devices = [_dev("new_light", "light", ["power"])]
+    result, report = map_to_new_home(old, new_devices)
+    assert result is not None
+    assert ("old_light", "new_light") in report["transferred"]["devices"]
+    assert "new_light" not in report["unmatched_new"]    # 매칭됨 → unmatched 아님
+
+
+def test_new_device_count_over_limit_rejected_before_mapping():
+    """[Med-4] 상한 초과 새 기기는 매핑·deepcopy 전에 거부(대량 작업 차단)."""
+    from home_profile.schema import MAX_DEVICES
+    old = _old_home()
+    new_devices = [_dev(f"d{i}", "sensor", ["power"]) for i in range(MAX_DEVICES + 1)]
+    result, report = map_to_new_home(old, new_devices)
+    assert result is None
+    assert report["errors"]
+    assert _identity_holds(old, report)
+
+
 # ---------- 데모 (Task 3 계약 최소 고정) ----------
 
 def test_demo_relocate_output(capsys):
@@ -235,4 +287,6 @@ def test_demo_relocate_output(capsys):
     assert demo_relocate.main([]) == 0
     out = capsys.readouterr().out
     assert "보류" in out                             # 손실 없는 보류가 화면에
+    assert "이전됨" in out                           # 이전 요약도 화면에(AC2)
     assert "설문 검증 대기" in out                    # H2 미검증 라벨(AC3)
+    assert "실기기 아님" in out                       # NFR6 정직 표기(계약 9)

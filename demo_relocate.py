@@ -126,7 +126,7 @@ def main(argv=None) -> int:
         elif h["kind"] == "routine":
             _emit(f"  루틴 보류: #{h['routine_index']} — 사유 {h['reason']}")
     if report["unmatched_new"]:
-        _emit(f"  설정 못 받은 새 기기: {', '.join(report['unmatched_new'])}")
+        _emit(f"  옛 기기와 매칭 안 된 새 기기: {', '.join(report['unmatched_new'])}")
 
     # 경계 4: 종료 푸터 — 배너 1회
     _emit()

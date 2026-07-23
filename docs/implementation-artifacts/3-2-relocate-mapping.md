@@ -4,7 +4,7 @@ baseline_commit: a6c6deb
 
 # Story 3.2: 이사 — 새 기기 집합 매핑
 
-Status: review
+Status: done
 
 ## Story
 
@@ -114,6 +114,27 @@ device_ref가 그대로였지만, 이사는 **기기 집합 자체가 바뀐다*
         P-2 반박 완성. 이전/보류 요약을 화면에 보이는 것이 이 장면의 정직성
   - [x] H2 가설 표기를 대본에 명시: "전세 거주자 수용도 가설은 **설문 검증 대기**,
         발표에서 근거로 쓸 때 라벨 병기"(NFR6). SURVEY_PLAN.md 링크
+
+### Review Findings (code-review 2026-07-23 · GPT 3 리뷰어 · 회신 트리아지)
+
+- [x] [Review][Patch] 하드 실패 경로에서 옛 항목 전체가 held에 계상되지 않음
+      [home_profile/relocate.py map_to_new_home] — GPT High-1. new_devices 무효 시
+      즉시 반환하며 누락 0 항등식이 깨짐. `_abort`로 옛 항목 전체를 held(mapping_aborted)
+      계상 → 실패 경로에서도 항등식 성립. 회귀 테스트 추가. **적용됨**
+- [x] [Review][Patch] 최종 검증 실패인데 transferred가 남아 리포트가 거짓 이전 보고
+      [home_profile/relocate.py map_to_new_home] — GPT High-2. 결과 무효 시 누적된
+      transferred를 폐기하고 `_abort`로 옛 항목 held 계상. **적용됨**
+- [x] [Review][Patch] 매칭된 새 기기도 unmatched_new로 오보(설정 유무로 판정)
+      [home_profile/relocate.py] — GPT Med-3. 판정 기준을 '배정된 슬롯'으로 변경.
+      데모 라벨도 "매칭 안 된 새 기기"로 정정. **적용됨**
+- [x] [Review][Patch] 상한 초과 입력을 전부 처리 후 거부(자원 고갈)
+      [home_profile/relocate.py] — GPT Med-4. new_devices 길이·capability 수를
+      매핑·deepcopy 전에 MAX_DEVICES/MAX_CAPABILITIES_PER_DEVICE로 조기 거부
+      (3.1 리뷰 DoS 계보). **적용됨**
+- Med-5(데모 출력 증거 미흡) dismiss: 코드는 정상 출력(실행·`test_demo_relocate_output`
+      확인). 단 데모 테스트에 "이전됨"·"실기기 아님" 단언을 **보강**함.
+- 회귀 테스트 4개 추가(총 18개). 정상 경로 판정(루틴 원자성·결정성·매칭·aliasing)은
+      GPT도 정상 확인.
 
 ## Dev Notes
 
@@ -256,3 +277,8 @@ Claude Fable 5 (claude-fable-5) — 2026-07-23
   H2 미검증 가설 표기. 베이스라인 323 passed. Status: ready-for-dev.
 - 2026-07-23: Story 3.2 구현 완료 — map_to_new_home(매칭·보류 항등식·루틴 원자성·
   결정성·aliasing 격리), 데모·테스트 14개, DEMO_SCRIPT §8. Status: ready-for-dev → review.
+- 2026-07-23: GPT code-review(3 리뷰어) 후 patch 4건 적용 — High 2건(실패 경로
+  누락 0 항등식 붕괴 + phantom transferred)을 `_abort`(옛 항목 전체 held 계상)로
+  통합 해결, Med 2건(unmatched_new 오판정 → 매칭 슬롯 기준, 상한 초과 입력 조기
+  거부). 회귀 4건 추가(총 18). Med-5(증거) dismiss + 데모 테스트 보강.
+  **341 passed**(신규 4, 회귀 0). Status: review → done. **Epic 3 완료.**
