@@ -259,6 +259,176 @@ def split_chunks(profile) -> dict:
     return chunks
 
 
+# ---------- 저장 조각 병합 — split_chunks의 역함수 (Story 3.1) ----------
+def merge_chunks(chunks):
+    """저장 키 조각 {키이름: 객체} → 프로필. 반환 (profile | None, errors). **예외 금지**.
+
+    split_chunks(위)가 접은 것을 정확히 되돌린다:
+      - device:<ref> 조각의 `_settings`를 떼어 top-level settings[ref]로 편다
+      - 순서는 meta.device_refs가 진실 원천(딕셔너리 키 순서에 기대지 않는다)
+      - routine:<i>는 인덱스 순서대로 복원한다
+
+    meta는 유실 탐지에 쓴다(조용한 누락 금지): device_refs에 있는데 조각이
+    없거나 routine_count가 실제와 다르면 **거부** — 반쪽 프로필을 만들지 않는다.
+    병합 직후 validate_profile()을 다시 돌린다(와이어 불신, 계약 2) — 조각이
+    개별로 유효해도 합쳐서 유효하란 법은 없다.
+
+    ⚠️ routine.reassemble(BLE 20B 전송 청크의 바이트 재조립)과 다른 관심사다.
+    """
+    try:
+        if not isinstance(chunks, dict):
+            return None, [f"조각 입력이 dict가 아님({type(chunks).__name__})"]
+        meta = chunks.get("meta")
+        if not isinstance(meta, dict):
+            return None, ["meta 조각이 없거나 객체가 아님 — 복원 불가"]
+        refs = meta.get("device_refs")
+        if not isinstance(refs, list):
+            return None, ["meta.device_refs가 목록이 아님 — 복원 불가"]
+        routine_count = meta.get("routine_count")
+        if not isinstance(routine_count, int) or routine_count < 0:
+            return None, ["meta.routine_count가 음이 아닌 정수가 아님 — 복원 불가"]
+
+        errs = []
+        profile = {
+            "schema_version": meta.get("schema_version"),
+            "reserved_wellness": meta.get("reserved_wellness", {}),
+            "devices": [],
+            "settings": {},
+            "routines": [],
+        }
+
+        # 기기: meta.device_refs 순서대로. 결손은 거부(부분 복원 금지).
+        for ref in refs:
+            chunk = chunks.get(f"device:{ref}")
+            if not isinstance(chunk, dict):
+                errs.append(f"기기 조각 결손: device:{ref!s:.32} — 반쪽 복원 거부")
+                continue
+            device = dict(chunk)
+            settings = device.pop("_settings", None)
+            if settings is not None:
+                profile["settings"][ref] = settings
+            profile["devices"].append(device)
+
+        # 루틴: 카운트 일치 강제 + 인덱스 순서 복원.
+        routine_keys = [k for k in chunks if isinstance(k, str)
+                        and k.startswith("routine:")]
+        if len(routine_keys) != routine_count:
+            errs.append(f"루틴 조각 {len(routine_keys)}개 ≠ meta.routine_count "
+                        f"{routine_count} — 유실·과잉 거부")
+        else:
+            for i in range(routine_count):
+                key = f"routine:{i}"
+                if key not in chunks:
+                    errs.append(f"루틴 조각 결번: {key} — 반쪽 복원 거부")
+                    break
+                profile["routines"].append(chunks[key])
+
+        # 알 수 없는 조각 종류는 조용히 버리지 않는다.
+        for k in chunks:
+            if k != "meta" and not (isinstance(k, str) and
+                                    (k.startswith("device:") or
+                                     k.startswith("routine:"))):
+                errs.append(f"알 수 없는 조각 종류 — 거부"
+                            f"({type(k).__name__} len={len(str(k))})")
+
+        if errs:
+            return None, errs
+
+        errs = validate_profile(profile)          # 와이어 불신 — 병합 후 재검증
+        if errs:
+            return None, errs
+        return profile, []
+    except Exception as e:   # fail-closed
+        return None, [f"병합 내부 오류({type(e).__name__}) — 거부"]
+
+
+# ---------- 캐리어 왕복 — 온바디 영속화·복원 (Story 3.1) ----------
+# 캐리어는 인자로 주입받는다 — storage는 어떤 캐리어 구현도 import하지 않는다
+# (1.3 경계: 벤더는 물론 참조 어댑터도 여기서 고정하지 않는다).
+def persist_to_carrier(profile, carrier):
+    """프로필을 저장 조각으로 나눠 캐리어에 새긴다. 반환 errors(빈 리스트 = 성공).
+
+    조각은 개별 직렬화(JSON UTF-8 compact — 기준 표현)해 {키: bytes}로 넘긴다.
+    캐리어 put_records가 원자적이므로(한계 초과 시 배치 전체 거부) 반쪽 저장은
+    생기지 않는다.
+    """
+    try:
+        errs = validate_profile(profile)          # 검증 안 거친 프로필은 와이어로 안 나간다
+        if errs:
+            return errs
+        records = {}
+        for name, obj in split_chunks(profile).items():
+            try:
+                records[name] = _dumps(obj)
+            except Exception as e:
+                errs.append(f"조각 {name!s:.32} 직렬화 실패({type(e).__name__})")
+        if errs:
+            return errs
+        return carrier.put_records(records)
+    except Exception as e:   # fail-closed
+        return [f"영속화 내부 오류({type(e).__name__}) — 거부"]
+
+
+def restore_from_carrier(carrier):
+    """캐리어 레코드만으로 프로필을 복원한다. 반환 (profile | None, errors).
+
+    **재등록 절차가 없다** — 이 함수는 캐리어를 읽고 병합·검증할 뿐, 기기를
+    새로 등록하거나 device_ref를 발급하는 경로가 존재하지 않는다(FR4).
+    서버·네트워크 코드도 없다 — AC3는 참은 게 아니라 개입할 자리가 없는 것이다.
+
+    meta를 먼저 읽어 필요한 키 목록을 알아내고, 전부 모이면 merge_chunks로
+    병합한다. 하나라도 없으면 (None, errors) — 캐리어 get_records 계약(반쪽
+    결과 없음)을 그대로 잇는다.
+    """
+    try:
+        got, errs = carrier.get_records(["meta"])
+        if errs:
+            return None, errs
+        meta_obj, errs = _load_chunk(got["meta"], "meta")
+        if errs:
+            return None, errs
+        refs = meta_obj.get("device_refs")
+        count = meta_obj.get("routine_count")
+        if not isinstance(refs, list) or not isinstance(count, int) or count < 0:
+            return None, ["meta 조각이 병합 계약을 만족하지 않음 — 복원 불가"]
+
+        names = ([f"device:{r}" for r in refs] +
+                 [f"routine:{i}" for i in range(count)])
+        chunks = {"meta": meta_obj}
+        if names:
+            got, errs = carrier.get_records(names)
+            if errs:
+                return None, errs                 # 반쪽 결과 없음 — 그대로 전파
+            for name, payload in got.items():
+                obj, errs = _load_chunk(payload, name)
+                if errs:
+                    return None, errs
+                chunks[name] = obj
+        return merge_chunks(chunks)
+    except Exception as e:   # fail-closed
+        return None, [f"복원 내부 오류({type(e).__name__}) — 거부"]
+
+
+def _load_chunk(payload, name):
+    """조각 bytes → 객체. 반환 (obj | None, errors). deserialize와 같은 불신 계보 —
+    단 조각은 프로필 전체가 아니라서 validate_profile 대신 구조 검사만 하고,
+    전체 검증은 merge_chunks 이후 한 번에 한다."""
+    if not isinstance(payload, (bytes, bytearray)):
+        return None, [f"조각 {name!s:.32}: bytes가 아님({type(payload).__name__})"]
+    if len(payload) > MAX_WIRE_BYTES:
+        return None, [f"조각 {name!s:.32}: {len(payload):,}B 상한 초과 — 파싱 거부"]
+    try:
+        obj = json.loads(payload.decode("utf-8"),
+                         object_pairs_hook=_no_duplicate_keys)
+    except _DuplicateKey as e:
+        return None, [f"조각 {name!s:.32}: 중복 키 {e.args[0]} — 거부"]
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as e:
+        return None, [f"조각 {name!s:.32}: 파싱 실패({type(e).__name__})"]
+    if not isinstance(obj, dict):
+        return None, [f"조각 {name!s:.32}: 객체가 아님({type(obj).__name__})"]
+    return obj, []
+
+
 # ---------- 크기 리포트 ----------
 def _safe_len(obj):
     """직렬화 길이. 실패 시 **None**(측정 불가) — 0이 아니다.

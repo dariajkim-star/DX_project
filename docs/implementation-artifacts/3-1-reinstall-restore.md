@@ -4,7 +4,7 @@ baseline_commit: d4d4465
 
 # Story 3.1: 재설치 후 무재등록 복원
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -45,88 +45,88 @@ Epic 1이 세운 온바디 저장(1.2)·캐리어 추상화(1.3) 위에 **복원
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: `merge_chunks` — `split_chunks`의 정확한 역함수** (AC: 1, 2)
-  - [ ] ⚠️ **새 저장 표현을 발명하지 마라.** 저장 조각 형식은 이미 `split_chunks`
+- [x] **Task 1: `merge_chunks` — `split_chunks`의 정확한 역함수** (AC: 1, 2)
+  - [x] ⚠️ **새 저장 표현을 발명하지 마라.** 저장 조각 형식은 이미 `split_chunks`
         (`home_profile/storage.py:229`)가 정한다: `meta`(schema_version·
         reserved_wellness·device_refs·routine_count) + `device:<ref>`(기기 정의 +
         `_settings` 키에 접힌 그 기기 설정) + `routine:<i>`. 복원은 이 형식을
         **되돌리는 것**이지 새로 정의하는 게 아니다
-  - [ ] `merge_chunks(chunks: dict) -> (profile | None, errors: list)`를
+  - [x] `merge_chunks(chunks: dict) -> (profile | None, errors: list)`를
         `home_profile/storage.py`에 추가. `split_chunks`가 접은 것을 편다:
         `device:<ref>` 조각에서 `_settings`를 떼어내 top-level `settings[ref]`로
         복원하고, 나머지 필드로 `devices[]` 엔트리를 만든다. `routine:<i>`는
         인덱스 순서대로 `routines[]`에 담는다. `meta`에서 schema_version과
         reserved_wellness를 얹는다
-  - [ ] **meta를 유실 탐지에 쓴다(조용한 누락 금지, FR5 계보).** `meta.device_refs`에
+  - [x] **meta를 유실 탐지에 쓴다(조용한 누락 금지, FR5 계보).** `meta.device_refs`에
         있는데 `device:<ref>` 조각이 없으면 **거부**(반쪽 프로필 금지). `routine_count`와
         실제 `routine:*` 조각 수가 다르면 거부. 순서는 `meta.device_refs`가 진실 —
         dict 키 순서에 기대지 않는다
-  - [ ] **계약 승계(1.2 storage.py docstring):** 예외 금지(어떤 조각 입력에도
+  - [x] **계약 승계(1.2 storage.py docstring):** 예외 금지(어떤 조각 입력에도
         `(None, errors)`), 와이어 불신(병합 직후 `validate_profile()` 재실행 —
         조각이 개별로 유효해도 합쳐서 유효하란 법 없다), fail-closed
-  - [ ] ⚠️ `reassemble`(routine.py:181)과 **혼동 금지**. 그건 BLE 전송용 바이트
+  - [x] ⚠️ `reassemble`(routine.py:181)과 **혼동 금지**. 그건 BLE 전송용 바이트
         청크(20B MTU) 재조립이고, 이건 **저장 키 조각**(meta/device/routine) 병합이다.
         관심사가 다르다 — 이름·경로를 재사용하지 말 것
 
-- [ ] **Task 2: 온바디 영속화 왕복 — 캐리어를 통한 저장·복원** (AC: 1, 2, 3)
-  - [ ] ⚠️ **경계 확인 먼저.** `split_chunks`는 조각을 **파이썬 객체**로 낸다.
+- [x] **Task 2: 온바디 영속화 왕복 — 캐리어를 통한 저장·복원** (AC: 1, 2, 3)
+  - [x] ⚠️ **경계 확인 먼저.** `split_chunks`는 조각을 **파이썬 객체**로 낸다.
         캐리어(`put_records`/`get_records`)는 **bytes**만 다룬다(carrier.py 계약 2:
         불투명 바이트). 그 사이 조각별 직렬화가 필요하다 — 조각 하나하나에
         `storage._dumps`(또는 조각 단위 serialize)를 적용해 `{키: bytes}` 레코드 맵을
         만든다. **새 포맷 금지**: JSON UTF-8 compact가 기준(storage.py docstring)
-  - [ ] `persist_to_carrier(profile, carrier) -> errors` 와
+  - [x] `persist_to_carrier(profile, carrier) -> errors` 와
         `restore_from_carrier(carrier) -> (profile | None, errors)`를 얇게 추가한다.
         배치는 어디 두는가 = 경계 결정: `home_profile/`은 코어이고 캐리어를 안다
         (carrier.py가 이미 `home_profile` 안). storage↔carrier를 잇는 얇은 오케스트레이션은
         **storage에 두되 carrier를 인자로 받는다**(storage가 carrier를 import하면
         1.3 AST 경계와 충돌하는지 먼저 확인 — `test_carrier_neutrality.py`가 감시).
         충돌하면 데모/신규 얇은 모듈에 두고 storage는 순수 profile↔chunks만 유지
-  - [ ] restore = `carrier.get_records(meta 먼저 읽어 device_refs·routine_count 파악)` →
+  - [x] restore = `carrier.get_records(meta 먼저 읽어 device_refs·routine_count 파악)` →
         필요한 모든 키를 `get_records` → 조각별 역직렬화 → `merge_chunks` →
         `validate_profile`. **get_records가 하나라도 없으면 (None, errors)**
         (carrier 계약: 반쪽 결과 없음) — 이 경우 복원 실패를 정직하게 보고
-  - [ ] ⚠️ **"재등록 절차"가 코드에 없음을 구조로 보인다.** 복원은 캐리어 레코드만
+  - [x] ⚠️ **"재등록 절차"가 코드에 없음을 구조로 보인다.** 복원은 캐리어 레코드만
         읽는다 — 기기를 새로 등록하거나 device_ref를 새로 발급하는 경로가
         **존재하지 않는다**. 복원된 device_ref 집합 == 원본과 동일해야 한다(AC1)
 
-- [ ] **Task 3: 재설치 데모 — "폰을 지웠는데 손목이 기억한다"** (AC: 1, 2, 3)
-  - [ ] `demo_reinstall.py` 신설 — 한 장면: 프로필 생성 → `persist_to_carrier`
+- [x] **Task 3: 재설치 데모 — "폰을 지웠는데 손목이 기억한다"** (AC: 1, 2, 3)
+  - [x] `demo_reinstall.py` 신설 — 한 장면: 프로필 생성 → `persist_to_carrier`
         (=워치에 새김) → **"앱 삭제·재설치" 시뮬레이션**(앱/폰 측 상태를 통째로 버리고
         캐리어만 남긴다) → `restore_from_carrier` → 복원 == 원본 비교 표시
-  - [ ] ⚠️ **재설치를 정직하게 모델링하라.** "앱 삭제"는 폰 로컬 상태 소실이다.
+  - [x] ⚠️ **재설치를 정직하게 모델링하라.** "앱 삭제"는 폰 로컬 상태 소실이다.
         캐리어(참조 어댑터)는 워치를 대신하므로 **살아남는다**. 새 `MemoryCarrier`를
         만들면 그건 워치까지 교체한 것(=다른 시나리오). 같은 캐리어 인스턴스를
         유지하되 앱 측 변수만 버리는 것이 "재설치"의 정확한 표현이다
-  - [ ] **AC3 절정: `enforce_offline` 안에서 복원 실행**(offline_guard.py 재사용,
+  - [x] **AC3 절정: `enforce_offline` 안에서 복원 실행**(offline_guard.py 재사용,
         2.3 패턴). "네트워크 없이, 클라우드 조회 없이 복원됨"이 한 화면에 선다.
         차단 상태에서 성공해야 "부를 수 없다"가 증명된다(2.3의 "부르지 않았다"보다 강함)
-  - [ ] 배너 규약(`CARRIER_INTERFACE.md §4-b`)·참조 어댑터 정직 표기 유지 —
+  - [x] 배너 규약(`CARRIER_INTERFACE.md §4-b`)·참조 어댑터 정직 표기 유지 —
         화면 어디서도 "가민에서 됨"으로 읽히면 안 된다(NFR6, MemoryCarrier docstring)
-  - [ ] ⚠️ 폴백 규약 승계: 동작한 척 금지. 복원 실패는 우아하게 표시하고 비정상 종료
+  - [x] ⚠️ 폴백 규약 승계: 동작한 척 금지. 복원 실패는 우아하게 표시하고 비정상 종료
 
-- [ ] **Task 4: 테스트** (AC: 1, 2, 3)
-  - [ ] `tests/test_reinstall_restore.py` 신설
-  - [ ] **왕복 무손실(AC2):** `merge_chunks(split_chunks(p))` == p(의미적 동일)를
+- [x] **Task 4: 테스트** (AC: 1, 2, 3)
+  - [x] `tests/test_reinstall_restore.py` 신설
+  - [x] **왕복 무손실(AC2):** `merge_chunks(split_chunks(p))` == p(의미적 동일)를
         대표 샘플 여러 크기(SMALL/TYPICAL/LARGE)에 대해 단언. settings 접힘/펴짐이
         정확히 역이고, device_ref 순서·루틴 순서가 보존됨을 **정확한 값**으로 단언
-  - [ ] **재설치 복원(AC1):** persist → 앱 상태 폐기 → restore == 원본. 복원된
+  - [x] **재설치 복원(AC1):** persist → 앱 상태 폐기 → restore == 원본. 복원된
         device_ref 집합이 원본과 동일(재등록으로 새 ref가 생기지 않음)
-  - [ ] **클라우드 조회 없음(AC3) — 두 겹:** ① 2.2 패턴 monkeypatch로 복원 경로에
+  - [x] **클라우드 조회 없음(AC3) — 두 겹:** ① 2.2 패턴 monkeypatch로 복원 경로에
         네트워크 호출 0건 감시(부르지 않았다) ② `enforce_offline` 안에서 restore가
         동일 성공(부를 수 없다). 종단 동등성은 2.3 패턴 재사용
-  - [ ] **fail-closed 회귀:** meta에 있는 device 조각 결손 → `(None, errors)`(예외 아님);
+  - [x] **fail-closed 회귀:** meta에 있는 device 조각 결손 → `(None, errors)`(예외 아님);
         routine_count 불일치 → 거부; 조각 bytes 손상(비UTF8·JSON 깨짐) → 거부.
         **부분 복원 금지**를 단언(반쪽 프로필이 통과하지 않음)
-  - [ ] 회귀 기준선: **296 passed**(`d4d4465`, Epic 2 완료 시점). 신규 테스트만큼
+  - [x] 회귀 기준선: **296 passed**(`d4d4465`, Epic 2 완료 시점). 신규 테스트만큼
         증가하고 기존 회귀 0
 
-- [ ] **Task 5: 문서 — 발표 대본·데이터 소재 접점**
-  - [ ] `docs/DEMO_SCRIPT.md`에 재설치 복원 장면 절 추가(P-2 반박 위치). 대표 리뷰
+- [x] **Task 5: 문서 — 발표 대본·데이터 소재 접점**
+  - [x] `docs/DEMO_SCRIPT.md`에 재설치 복원 장면 절 추가(P-2 반박 위치). 대표 리뷰
         인용은 `data/painpoints.csv` 대조 후에만(CLAUDE.md 오염 방지 규칙)
-  - [ ] ⚠️ **H2 가설 표기 불필요, 그러나 P-2 실측 라벨 유지.** 3.1은 재설치(관찰된
+  - [x] ⚠️ **H2 가설 표기 불필요, 그러나 P-2 실측 라벨 유지.** 3.1은 재설치(관찰된
         행동)라 H2(이사=온바디 수용도↑, 3.2에서 다룸)와 무관하다. 단 P-2 수치는
         "경쟁 2.0배 열위" 맥락과 함께 인용한다(NFR6)
-  - [ ] AC3와 FR7의 정합을 1줄로 명시: 복원이 클라우드를 안 쓰는 것은 곧
+  - [x] AC3와 FR7의 정합을 1줄로 명시: 복원이 클라우드를 안 쓰는 것은 곧
         "프로필 원본이 서버에 없다"(Epic 4 FR7)의 예고편 — 서사 연결 유지
 
 ## Dev Notes
@@ -224,13 +224,52 @@ storage에 두고, carrier를 인자로 받는 얇은 오케스트레이션(`res
 
 ### Agent Model Used
 
-_(dev-story 실행 시 기록)_
+Claude Fable 5 (claude-fable-5) — 2026-07-23
 
 ### Debug Log References
 
+- RED: `merge_chunks` 미존재 → ImportError (collection error) 확인
+- GREEN 1차: 20/20 (데모 테스트 제외) — merge/persist/restore 전부 첫 회 통과
+- 데모 테스트 1차 실패: subprocess 호출이 cp949 콘솔 인코딩에 걸림 →
+  하우스 패턴(2.4 `test_night_scenario`: in-process `main()` + capsys)으로 정정
+- P-2 인용 대조(CLAUDE.md 오염 방지 규칙): epics.md의 인용을
+  `crawl_playstore_thinq.csv` 원문과 대조 — 원문은 "핸드폰 초기화 하고 재설치
+  하니... 제품이 전부 없어짐 삼성껀 그대로 인데"(2025-08-28, 평점 2)로 실재.
+  데모·대본의 인용을 원문 표기 그대로 정정
+- 데모 실측(`--offline`): 기기 12대·루틴 8개 → 온바디 4,300B(21개 레코드) →
+  앱 상태 폐기 → 오프라인 강제 안 복원 → 삭제 전과 일치 → exit 0
+- 전체 회귀: **317 passed** (296 + 21, 회귀 0)
+
 ### Completion Notes List
 
+- **Task 1**: `merge_chunks` — `split_chunks`의 정확한 역함수. `_settings`
+  접힘/펴짐, meta.device_refs 순서 복원, 결손·카운트 불일치·미지 조각 전부
+  거부(반쪽 프로필 금지). 병합 직후 `validate_profile` 재실행(와이어 불신).
+  예외 금지·fail-closed 계약 승계.
+- **Task 2**: `persist_to_carrier`/`restore_from_carrier` — storage에 두되
+  캐리어는 **인자 주입**(storage는 어떤 캐리어 구현도 import하지 않음 —
+  1.3 AST 경계와 무충돌, `test_carrier_neutrality` 통과로 확인). 조각별
+  JSON UTF-8 직렬화(`_load_chunk`는 deserialize와 같은 불신 계보: 상한·중복
+  키·비UTF8 거부). 복원 경로에 기기 등록·ref 발급 코드 부재(FR4를 구조로).
+- **Task 3**: `demo_reinstall.py` — 3장면(등록→재설치→복원). 재설치의 정직한
+  모델링: 캐리어 인스턴스 유지 + 앱 상태만 폐기(함정 3). `--offline`으로
+  AC3 절정. 배너 4경계·참조 어댑터 표기·P-2 원문 인용.
+- **Task 4**: `tests/test_reinstall_restore.py` 21개 — 왕복 무손실(3크기),
+  재설치 무재등록, AC3 두 겹(monkeypatch 감시 + enforce_offline 강제 +
+  종단 동등성), fail-closed 회귀(결손·카운트·손상·빈 캐리어·부분 소실).
+- **Task 5**: `DEMO_SCRIPT.md` §7 재설치 장면 — P-2 반박 위치, 원문 대조
+  완료 인용만, FR7 예고편 1줄, 실기기 아님 표기. H2 표기는 3.2로 유보.
+
 ### File List
+
+- `home_profile/storage.py` — 수정 (`merge_chunks`·`persist_to_carrier`·
+  `restore_from_carrier`·`_load_chunk` 추가)
+- `home_profile/__init__.py` — 수정 (신규 공개 심볼 3종 export)
+- `demo_reinstall.py` — 신규 (재설치 복원 데모, 3장면)
+- `tests/test_reinstall_restore.py` — 신규 (21 tests)
+- `docs/DEMO_SCRIPT.md` — 수정 (시연 순서 7 + §7 재설치 장면)
+- `docs/implementation-artifacts/3-1-reinstall-restore.md` — 본 파일
+- ※ `home_profile/schema.py`·`appliance_sim/` **무수정** — 기존 스키마·경계 유지
 
 ### Change Log
 
@@ -238,3 +277,6 @@ _(dev-story 실행 시 기록)_
   후 무재등록 복원(FR4). 핵심 신규 = `merge_chunks`(`split_chunks` 역함수) +
   캐리어를 통한 복원 왕복. AC3는 `enforce_offline`으로 구조적 증명. 베이스라인
   296 passed. Status: ready-for-dev.
+- 2026-07-23: Story 3.1 구현 완료 — merge_chunks 왕복 무손실, 캐리어 복원
+  (재등록 경로 구조적 부재), 데모·테스트 21개, P-2 인용 원문 대조.
+  **317 passed** (신규 21, 회귀 0). Status: ready-for-dev → review.
