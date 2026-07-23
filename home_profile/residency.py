@@ -44,14 +44,21 @@ def data_residency(profile, carrier):
       restorable_from_onbody — 온바디만으로 복원 성공(원본이 거기 있다는 증거)
       errors                 — 실패 사유(fail-closed)
     """
+    # ⚠️ 구조적 사실 vs 관찰의 구분(코드리뷰 2026-07-23, Vex+Dana):
+    #   server_holds_original·server_transmitted는 **구조적 사실**이다 — 이 코드에
+    #   서버 전송 경로가 존재하지 않으므로 False·빈 목록이다(측정한 런타임 수치가
+    #   아니다). AC2가 요구하는 '소재 공개' 필드라 유지하되, 그 **관찰적 증거**는
+    #   아래 restorable_from_onbody(원본이 온바디만으로 복원됨)와 소재 확인이
+    #   enforce_offline 안에서 성공한다는 테스트다. report는 관찰(footprint·복원)과
+    #   구조적 공개(서버 없음)를 섞지 않고 둘 다 정직하게 표기한다.
     report = {
         "profile_location": "온바디 (참조 어댑터 레코드 — 실기기 아님)",
-        "server_holds_original": False,
-        "server_transmitted": [],            # AC2: 없음 — 서버로 가는 항목 없음
-        "onbody_record_count": 0,
+        "server_holds_original": False,      # 구조적 사실(전송 경로 부재) — 증거는 restorable_from_onbody
+        "server_transmitted": [],            # AC2 공개: 없음 — 서버로 가는 항목 없음(구조적)
+        "onbody_record_count": 0,            # ↓ 아래는 관찰값(실측)
         "onbody_bytes": 0,
         "onbody_kinds": {k: 0 for k in _KNOWN_KINDS},
-        "restorable_from_onbody": False,
+        "restorable_from_onbody": False,     # 관찰: restore_from_carrier == 원본
         "errors": [],
     }
     try:

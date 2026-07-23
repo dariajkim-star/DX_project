@@ -4,7 +4,7 @@ baseline_commit: 853710f
 
 # Story 4.1: 무계정 로컬 전용 온보딩
 
-Status: review
+Status: done
 
 ## Story
 
@@ -96,6 +96,23 @@ so that 가전을 쓰려고 신원을 넘기지 않아도 된다.
   - [x] P-3 인용은 `CX_DEFINITION §2` 대표리뷰 대조 후에만(CLAUDE.md 오염 방지).
         원문: "굳이 회원가입을 강요하는 이유가 뭡니까"
   - [x] AC2 문서(`CONSENT_SCOPE.md`)를 대본에서 링크 — 동의 범위를 심사위원이 열람 가능하게
+
+### Review Findings (party code-review 2026-07-23 · Code Review Crew)
+
+크루: 🔒Vex(보안) 😤Grumbal(어드버서리) 🌶️Boundary(엣지) 🎯Yui(장인) 🚢Dana(실용)
+
+- [x] [Review][Patch] report의 `account_created`·`login_performed`·`network_calls`가
+      **측정 안 한 리터럴**인데 측정한 척 — NFR6 자기위반(삭제된
+      SAMPLE_ASSUMPTIONS_ARE_MEASURED 재현). Vex+Yui+Grumbal. 세 필드 제거,
+      무계정은 `not_required` 명시 + enforce_offline/monkeypatch 테스트가 증명. **적용됨**
+- [x] [Review][Patch] `find_identifier_violations` 재호출이 **죽은 코드** — validate_profile이
+      맨 먼저 실행(schema.py:481)해 validate 통과 = 식별자 0 이미 보장. Yui.
+      거짓 이중방어 제거. **적용됨**
+- [x] [Review][Patch] 같은 캐리어 **재온보딩 시 유령 레코드 잔류** — put_records가
+      merge라 옛 프로필 데이터가 온바디에 남고, data_residency footprint(현재
+      프로필 기준)가 실제 저장량을 축소 보고(4.2 자기반증). Grumbal 킬샷.
+      해법(Yui·만장일치): 온보딩=최초 설치, `get_records(["meta"])`로 기존 프로필
+      감지해 거부. 재설정은 폐기(4.4) 후 별도 흐름. 회귀 2개 추가. **적용됨**
 
 ## Dev Notes
 

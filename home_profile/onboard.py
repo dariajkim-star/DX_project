@@ -27,7 +27,6 @@ import copy
 
 from .schema import (
     FORBIDDEN_KEY_FRAGMENTS,
-    find_identifier_violations,
     new_profile,
     validate_profile,
 )
@@ -91,12 +90,15 @@ def onboard_local(devices, carrier):
     (device_ref·device_type·capabilities). carrier: 온바디 저장소(워치 대역).
 
     **계정·로그인·서버 등록 단계가 경로에 없다** — 인자에 자격증명이 없고,
-    네트워크 호출이 없다. report가 그 사실을 값으로 담는다.
+    네트워크 호출이 없다.
+
+    report는 **관찰한 것만** 담는다(코드리뷰 2026-07-23, Vex+Yui): 무계정을
+    'account_created=False' 같은 측정 안 한 리터럴로 주장하지 않는다(그건
+    삭제된 SAMPLE_ASSUMPTIONS_ARE_MEASURED와 같은 장식·NFR6 위반). '계정을
+    요구하지 않음'은 `not_required` 목록으로 명시하고, '네트워크를 안 부른다'는
+    tests/test_onboarding.py의 enforce_offline·monkeypatch가 증명한다.
     """
     report = {
-        "account_created": False,
-        "login_performed": False,
-        "network_calls": 0,
         "consent_scope": [dict(c) for c in LOCAL_CONSENT_SCOPE],
         "not_required": [dict(c) for c in NOT_REQUIRED],
         "devices_connected": 0,
@@ -112,6 +114,24 @@ def onboard_local(devices, carrier):
             report["errors"].append(f"devices는 목록이어야 함({type(devices).__name__})")
             return None, report
 
+        # 온보딩 = 최초 설치. 이미 프로필이 있는 캐리어에 다시 온보딩하면
+        # put_records가 merge라 옛 레코드가 유령으로 잔류하고(데이터 최소화 위반),
+        # data_residency의 footprint(현재 프로필 기준)가 실제 온바디 저장량을
+        # 축소 보고한다(4.2 소재 명시가 자기반증). 그래서 **거부**한다 — 재설정은
+        # 폐기(revocation, 4.4) 후 다시 온보딩하는 별도 흐름이다(코드리뷰 파티
+        # 2026-07-23: Grumbal footprint divergence · Yui meta 감지 · 관심사 분리).
+        # 빈 여부는 meta 레코드 존재로 판정한다 — 모든 프로필은 meta 하나를 갖고,
+        # Carrier 프로토콜엔 '나열/비었나' 메서드가 없어 get_records가 유일한 창이다.
+        try:
+            existing, _ = carrier.get_records(["meta"])
+        except Exception:
+            existing = None                      # 조회 자체가 터지면 빈 것으로 보지 않는다
+        if existing:
+            report["errors"].append(
+                "이미 온보딩된 캐리어 — 온보딩은 빈 워치 전제. "
+                "재설정은 폐기(revocation) 후 다시 온보딩할 것")
+            return None, report
+
         profile = new_profile()
         for d in devices:
             if not isinstance(d, dict):
@@ -121,14 +141,14 @@ def onboard_local(devices, carrier):
             # 잡는다(조용히 떨궈 우회하지 않는다, 함정 3).
             profile["devices"].append(copy.deepcopy(d))
 
-        # FR7 정합: 유효성 + 식별자 0을 둘 다 강제. 온보딩이 식별자 뒷문이 되지 않게.
+        # FR7 정합: 유효성 강제 — 식별자 스캔은 validate_profile이 **맨 먼저**
+        # 돌린다(schema.py:481). 별도 find_identifier_violations 재호출은 죽은
+        # 코드였다(validate 통과 = 식별자 0 이미 보장). 거짓 이중방어 제거
+        # (코드리뷰 2026-07-23, Yui). 온보딩이 식별자 뒷문이 되지 않음은
+        # validate_profile 하나로 성립하고, 결과 검증은 테스트가 독립 확인한다.
         errs = validate_profile(profile)
         if errs:
-            report["errors"].append("온보딩 프로필이 유효하지 않음 — 거부")
-            return None, report
-        idv = find_identifier_violations(profile)
-        if idv:
-            report["errors"].append("온보딩 프로필에 식별자 검출 — 거부(FR7)")
+            report["errors"].append("온보딩 프로필이 유효하지 않음 — 거부(식별자 포함)")
             return None, report
 
         # 기기 연결 = 온바디 저장(3.1 persist_to_carrier). 네트워크 없음.

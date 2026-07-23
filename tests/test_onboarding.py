@@ -41,9 +41,11 @@ def test_onboarding_completes_without_account():
     profile, report = onboard_local(_devices(), carrier)
     assert profile is not None
     assert validate_profile(profile) == []
-    assert report["account_created"] is False
-    assert report["login_performed"] is False
     assert report["devices_connected"] == 2
+    # 무계정은 '측정 안 한 리터럴'로 주장하지 않는다(코드리뷰 Vex+Yui) —
+    # report는 관찰한 것(연결 수·동의 범위)만 담고, 계정 부재는 not_required로 명시.
+    assert "account_created" not in report
+    assert "network_calls" not in report
 
 
 def test_onboarding_persists_to_carrier():
@@ -100,7 +102,7 @@ def test_onboarding_makes_no_network_calls(monkeypatch):
     carrier = MemoryCarrier()
     profile, report = onboard_local(_devices(), carrier)
     assert profile is not None
-    assert report["network_calls"] == 0
+    assert report["errors"] == []          # 네트워크 안 부름 = monkeypatch가 증명(리터럴 아님)
 
 
 def test_onboarding_succeeds_under_offline_enforcement():
@@ -154,6 +156,35 @@ def test_onboarding_never_raises_on_garbage():
         assert isinstance(report, dict)
         if profile is None:
             assert report["errors"]
+
+
+def test_reonboarding_rejected():
+    """코드리뷰 파티(#3): 이미 온보딩된 캐리어에 재온보딩은 거부된다 —
+    put_records merge로 유령 레코드가 잔류하면 data_residency footprint가 실제
+    온바디 저장량을 축소 보고(4.2 자기반증). 재설정은 폐기 후 별도 흐름."""
+    carrier = MemoryCarrier()
+    p1, r1 = onboard_local(_devices(), carrier)
+    assert p1 is not None and r1["errors"] == []
+    # 같은 캐리어에 다른 구성으로 재온보딩 시도
+    p2, r2 = onboard_local([_dev("newdev", "styler", ["power"])], carrier)
+    assert p2 is None
+    assert r2["errors"]
+
+
+def test_reonboarding_does_not_leave_ghost_records():
+    """거부가 실제로 유령 레코드를 막는지 — 재온보딩 후에도 첫 프로필만 온바디에
+    있고 residency footprint가 실제 저장량과 일치."""
+    from home_profile import data_residency, restore_from_carrier
+    carrier = MemoryCarrier()
+    p1, _ = onboard_local(_devices(), carrier)
+    onboard_local([_dev("newdev", "styler", ["power"])], carrier)   # 거부됨
+    restored, errs = restore_from_carrier(carrier)
+    assert errs == [] and restored == p1                # 첫 프로필 그대로
+    r = data_residency(p1, carrier)
+    # footprint(현재 프로필)가 실제 온바디 저장량과 일치(유령 없음)
+    actual_onbody = sum(len(k.encode("utf-8")) + len(v)
+                        for k, v in carrier._store.items())
+    assert r["onbody_bytes"] == actual_onbody
 
 
 def test_empty_devices_onboards_empty_profile():

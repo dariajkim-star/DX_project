@@ -67,15 +67,13 @@ def main(argv=None) -> int:
         _emit(f"[{SIMULATOR_BANNER}] 온보딩 실패: {report['errors'][0]}")
         return 1
 
-    # 경계 2: 온보딩 결과 — 배너 1회
+    # 경계 2: 온보딩 결과 — 배너 1회. 관찰한 것만 보고한다(측정 안 한 카운트 금지).
     _emit()
     _emit(f"--- 온보딩 완료 · {SIMULATOR_BANNER} ---")
-    _emit(f"  계정 생성 {int(report['account_created'])}회 · "
-          f"로그인 {int(report['login_performed'])}회 · "
-          f"클라우드 조회 {report['network_calls']}회")
     _emit(f"  기기 연결 {report['devices_connected']}대 · 프로필 온바디 저장 완료")
+    _emit("  계정·로그인 요구: 없음 (아래 '요구하지 않는 것' 참조)")
     if args.offline:
-        _emit("  오프라인 강제 활성 — 계정 생성이 서버를 부를 자리가 없음을 강제 증명")
+        _emit("  오프라인 강제 안에서 완료 — 서버 조회가 불가한 상태에서 성공(구조 증명)")
 
     # 경계 3: 동의 범위 — 배너 1회. 정직한 최소.
     _emit()

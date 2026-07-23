@@ -4,7 +4,7 @@ baseline_commit: 636e7f1
 
 # Story 4.2: 데이터 소재 명시
 
-Status: review
+Status: done
 
 ## Story
 
@@ -92,6 +92,17 @@ so that "서버에 없다"는 주장을 확인할 수 있다.
 - [x] **Task 5: 문서 — 발표 대본**
   - [x] `docs/DEMO_SCRIPT.md`에 데이터 소재 장면(§10) 추가 — 4.1(§9)과 프라이버시
         한 쌍. `DATA_RESIDENCY.md` 링크. "서버에 없다를 화면으로 증명"이 핵심 메시지
+
+### Review Findings (party code-review 2026-07-23 · Code Review Crew)
+
+- [x] [Review][Patch] `server_holds_original`·`server_transmitted`가 측정 아닌
+      **구조적 사실**인데 런타임 수치처럼 읽힘 — Vex 지적, Dana 반론(restorable은
+      실관찰). AC2가 요구하는 공개 필드라 유지하되, 코드에 "구조적 사실(전송
+      경로 부재), 증거는 restorable_from_onbody + enforce_offline 테스트"로 정직
+      라벨. 관찰(footprint·복원)과 구조적 공개를 섞지 않음. **적용됨**
+- [x] [Review][Info] 재온보딩 유령 레코드 → residency footprint 축소 보고 문제는
+      **4.1 쪽에서 원천 차단**(재온보딩 거부). data_residency는 무수정.
+      `test_reonboarding_does_not_leave_ghost_records`가 footprint==실저장량 회귀 고정
 
 ## Dev Notes
 
