@@ -32,6 +32,7 @@ from .relocate import (
 )
 from .proximity import ProximityGuard, make_proximity_token
 from .residency import data_residency
+from .revoke import revoke_onbody
 from .routine import (
     chunk,
     execute_routine,
@@ -90,6 +91,7 @@ __all__ = [
     "map_to_new_home",
     "onboard_local",
     "reassemble",
+    "revoke_onbody",
     "routine_to_commands",
     "is_supported",
     "deserialize",
