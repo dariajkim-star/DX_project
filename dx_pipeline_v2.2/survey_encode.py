@@ -128,6 +128,10 @@ def encode_survey(raw: pd.DataFrame) -> pd.DataFrame:
     out["연령대"] = map_strict(raw[find_col(raw, Q_PREFIX["q3"])], MAP_Q3, "문3")
 
     q4 = raw[find_col(raw, Q_PREFIX["q4"])].fillna("")
+    # v4 호환: 문4가 '신혼·동거 2인/부부 2인'으로 세분됐지만(SURVEY_PLAN v4)
+    # 둘 다 "자녀 있음"을 포함하지 않아 자녀유무=0으로 자동 흡수 — 군집 입력 불변.
+    # 문7-1(묶음구매)·7-2(공유니즈)는 H3 사후 교차분석 전용 — FEATURE_COLUMNS에
+    # 넣지 않는다(화이트리스트 원칙). 원문 컬럼은 raw CSV에 그대로 남는다.
     out["자녀유무"] = q4.str.contains("자녀 있음").astype(int)
 
     out["점유형태_전월세"] = encode_tenure(raw[find_col(raw, Q_PREFIX["q5"])])

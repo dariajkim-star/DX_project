@@ -486,3 +486,128 @@ function verifyForm() {
   if (fail > 0) Logger.log('!! FAIL이 0이 될 때까지 배포 금지');
   return { pass: pass, fail: fail };
 }
+
+/**
+ * v4 적용 (2026-07-28 파티 — Home Starter Couple / H3 공유 니즈)
+ *
+ * 실행: applyV3() 적용 완료된 폼에 대해 applyV4() → verifyFormV4() 순서.
+ * ⚠️ 실행 전 dumpResponses() 백업 + 잔존 응답 0건 전제 (문4 보기 구조가 바뀐다).
+ *
+ * 근거(SURVEY_PLAN v4 §v3.1→v4):
+ *  - LG 가전은 혼수·입주 묶음 구매 카테고리인데 구매 순간을 재는 문항이 없었다
+ *  - '부부(자녀 없음)' 보기가 신혼·동거 2인을 흡수해 H3 검증 불가였다
+ *  - 공유/개인화 니즈(H3)는 온바디 구조의 '계정 집중' 반박과 직결
+ */
+function applyV4() {
+  const form = FormApp.openById(FORM_ID);
+  const items = form.getItems();
+  function find(prefix) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].getTitle().indexOf(prefix) === 0) return items[i];
+    }
+    return null;
+  }
+
+  // ── 1. 안내문: 필수 18 → 20문항 (v3.1 교훈 — 안내 수치가 실제와 다르면 안 된다)
+  form.setDescription(
+    '안녕하세요! LG 스마트가전(ThinQ) 사용 경험에 대한 짧은 설문입니다.\n\n' +
+    '⏱ 약 5분 소요 (필수 20문항)\n' +
+    '🎁 응답자 중 추첨 5명께 기프티콘을 드립니다 (연락처는 추첨 희망자만 마지막에 선택 입력)\n\n' +
+    '· 본 설문은 LG전자 공식 설문이 아니며, 개인 리서치 프로젝트입니다.\n' +
+    '· 익명으로 진행되며, 응답은 통계 분석 목적으로만 사용 후 폐기됩니다.\n' +
+    '· 수집 항목: 가전 사용 경험·가구 형태 등 아래 문항 응답 (개인 식별 정보 수집 없음)'
+  );
+  Logger.log('1. 안내문 정정 (필수 20문항)');
+
+  // ── 2. 문4: 2인 가구 세분 (신혼·동거 / 부부) — 경계는 도움말로 고정
+  const q4 = find('4.');
+  q4.asMultipleChoiceItem().setChoiceValues([
+    '1인 가구',
+    '신혼·동거 2인 가구',
+    '부부 2인 가구',
+    '자녀 있음 (미취학)',
+    '자녀 있음 (취학 이상)',
+    '부모님댁에 거주',
+    '기타',
+  ]);
+  q4.setHelpText('신혼·동거: 결혼 또는 동거 시작 약 3년 이내를 기준으로 답해주세요');
+  Logger.log('2. 문4 가구 형태 세분 (2인 가구 분리 + 경계 도움말)');
+
+  // ── 3. 문7-1 신설: 묶음 구매 (H3 — 혼수·입주 진입)
+  const q7 = find('7.');
+  const q71 = form.addMultipleChoiceItem()
+    .setTitle('7-1. LG 가전을 구매하실 때 여러 제품을 함께 구매하셨나요?')
+    .setChoiceValues([
+      '1대만 구매',
+      '2~3대 함께 구매',
+      '4대 이상 패키지로 구매',
+      '직접 구매하지 않음',
+    ])
+    .setRequired(true);
+  form.moveItem(form.getItemById(q71.getId()).getIndex(), q7.getIndex() + 1);
+  Logger.log('3. 문7-1 묶음 구매 신설 (문7 뒤 배치)');
+
+  // ── 4. 문7-2 신설: 공유/개인화 니즈 (H3) — 1인 가구 탈출구 필수
+  const q72 = form.addMultipleChoiceItem()
+    .setTitle('7-2. 함께 사는 사람과 가전 제어 권한이나 설정을 공유할 필요가 있나요?')
+    .setChoiceValues([
+      '함께 사는 사람이 없다',
+      '전혀 필요하지 않다',
+      '가끔 필요하다',
+      '자주 필요하다',
+      '각자 개인화된 설정이 필요하다',
+    ])
+    .setRequired(true);
+  form.moveItem(form.getItemById(q72.getId()).getIndex(), q7.getIndex() + 2);
+  Logger.log('4. 문7-2 공유 니즈 신설 (1인 가구 탈출구 포함)');
+
+  Logger.log('=== applyV4 완료 — verifyFormV4()로 검수할 것 ===');
+}
+
+/** v4 자동 검수 — verifyForm() 통과 후 추가 실행. 읽기 전용. */
+function verifyFormV4() {
+  const form = FormApp.openById(FORM_ID);
+  var pass = 0, fail = 0;
+  function check(label, cond, detail) {
+    if (cond) { pass++; Logger.log('[PASS] ' + label); }
+    else { fail++; Logger.log('[FAIL] ' + label + (detail ? ' — ' + detail : '')); }
+  }
+  const items = form.getItems();
+  function find(prefix) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].getTitle().indexOf(prefix) === 0) return items[i];
+    }
+    return null;
+  }
+
+  check('안내문 "필수 20문항"', form.getDescription().indexOf('필수 20문항') !== -1);
+
+  const q4 = find('4.');
+  check('문4 존재', q4 !== null);
+  if (q4) {
+    const ch = q4.asMultipleChoiceItem().getChoices().map(function (c) { return c.getValue(); });
+    check('문4 보기 7개', ch.length === 7, '실측 ' + ch.length + '개');
+    check('문4 신혼·동거 분리', ch.indexOf('신혼·동거 2인 가구') !== -1);
+    check('문4 경계 도움말(3년)', q4.getHelpText().indexOf('3년') !== -1);
+  }
+
+  const q71 = find('7-1.');
+  check('문7-1 존재', q71 !== null);
+  if (q71) {
+    check('문7-1 필수', q71.asMultipleChoiceItem().isRequired());
+    check('문7-1 문7 바로 뒤 배치', q71.getIndex() === find('7.').getIndex() + 1,
+          '실측 index ' + q71.getIndex());
+  }
+
+  const q72 = find('7-2.');
+  check('문7-2 존재', q72 !== null);
+  if (q72) {
+    const ch = q72.asMultipleChoiceItem().getChoices().map(function (c) { return c.getValue(); });
+    check('문7-2 1인 가구 탈출구', ch.indexOf('함께 사는 사람이 없다') !== -1);
+    check('문7-2 필수', q72.asMultipleChoiceItem().isRequired());
+  }
+
+  Logger.log('=== verifyFormV4 결과: PASS ' + pass + ' / FAIL ' + fail + ' ===');
+  if (fail > 0) Logger.log('!! FAIL이 0이 될 때까지 배포 금지');
+  return { pass: pass, fail: fail };
+}
