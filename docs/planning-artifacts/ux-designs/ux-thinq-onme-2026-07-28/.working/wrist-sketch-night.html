@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>ThinQ OnMe — 손목 1장 (설계안 · 미구현)</title>
+<style>
+  :root {
+    --bg: #f5f5f4; --ink: #1c1917; --dim: #78716c;
+    --watch-bg: #000000; --watch-fg: #ffffff; --watch-dim: #6e7681;
+    --success: #3fb950;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Pretendard", "Malgun Gothic", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 48px 24px; gap: 28px;
+  }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: .02em; color: var(--dim); }
+
+  /* ── 워치 베젤 ── */
+  .watch {
+    width: 260px; height: 260px; border-radius: 50%;
+    background: var(--watch-bg); color: var(--watch-fg);
+    border: 10px solid #27272a;
+    box-shadow: 0 12px 32px rgba(0,0,0,.25), inset 0 0 24px rgba(255,255,255,.03);
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; gap: 7px; padding: 30px; position: relative;
+  }
+  .watch .mode { font-size: 12px; color: var(--watch-dim); letter-spacing: .12em; }
+  .watch .alias { font-size: 23px; font-weight: 700; line-height: 1.25; }
+  .watch .state { font-size: 14px; color: var(--success); }
+  .watch .ref {
+    font-family: "D2Coding", "Cascadia Code", monospace;
+    font-size: 11px; color: var(--watch-dim); margin-top: 6px;
+  }
+  .watch .refcap { font-size: 10px; color: var(--watch-dim); }
+
+  /* ── 그림 밖 캡션 (요건: 라벨은 그림 밖) ── */
+  .captions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .captions span {
+    font-size: 12px; color: var(--dim);
+    border: 1px solid #d6d3d1; border-radius: 999px; padding: 4px 12px; background: #fff;
+  }
+
+  .note { max-width: 460px; font-size: 12.5px; color: var(--dim); line-height: 1.7; }
+  .note b { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<h1>ThinQ OnMe · 야간모드 — 손목 1장</h1>
+
+<div class="watch" role="img" aria-label="워치 야간모드 화면 설계안">
+  <div class="mode">🌙 야간모드</div>
+  <div class="alias">안방 에어컨</div>
+  <div class="state">바람 약하게 ✓</div>
+  <div class="ref">d1</div>
+  <div class="refcap">— 프로필이 아는 전부</div>
+</div>
+
+<div class="captions">
+  <span>설계안 — 미구현</span>
+  <span>인구통계는 설문 검증 대기</span>
+  <span>참조 어댑터 기반 — 실기기 아님 (NFR6)</span>
+</div>
+
+<p class="note">
+  <b>"안방 에어컨"</b>은 이 워치의 로컬 표시층에만 산다(설계 — 표시층 미구현).
+  프로필·캐리어·이동 경로에는 <b>d1</b>만 존재하며, 이는 코드가 강제한다
+  (<code>FORBIDDEN_KEY_FRAGMENTS</code> · 구현/테스트됨). 이사하면 별칭은
+  따라오지 않는다 — 옮길 수 없는 게 아니라 <b>옮길 것이 없다</b>.
+  무별칭 기기의 폴백 표기는 device_type 한글화("에어컨").
+</p>
+
+</body>
+</html>

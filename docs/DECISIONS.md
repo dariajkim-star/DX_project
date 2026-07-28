@@ -15,17 +15,18 @@
 | 2026-07-22 | PostgreSQL 도입 — **발견 트랙 전용**(B 분석결과 + C 실행이력), Epic 5로 분리해 발표 서사 밖, Docker 호스팅. 처방 트랙은 AST 테스트로 차단 | [postgres-portfolio-track](meetings/2026-07-22_postgres-portfolio-track.md) |
 | 2026-07-23 | ble_bless.py **미구현 표기 유지**(삭제 안 함) — 정직 표기 서명·AST 경계 반례·회귀 테스트 4건 자산. Epic 3/가민 실기기 연동 시 재평가 | [ble-bless-retention](meetings/2026-07-23_ble-bless-retention.md) |
 | 2026-07-23 | 온보딩 **재온보딩 거부** — 빈 워치 전제. `put_records`가 merge라 유령 레코드가 잔류해 데이터 소재 보고가 어긋난다. 재설정은 **폐기(4.4) → 재온보딩** | [4-1 파티 리뷰](implementation-artifacts/4-1-accountless-onboarding.md#review-findings-party-code-review-2026-07-23--code-review-crew) |
+| 2026-07-28 | **기기 별칭 = 로컬 표시층 전용 허용** — 프로필·캐리어·이동 경로 진입 금지, `FORBIDDEN_KEY_FRAGMENTS` 무변경(표시층 자체는 미구현·설계). 근거: PROFILE_SCHEMA v2 "표시용 이름은 프로필 밖" + 리뷰 F1. 별칭 비이전은 FR7의 증거("옮길 것이 없다") | [UX 계약](planning-artifacts/ux-designs/ux-thinq-onme-2026-07-28/EXPERIENCE.md) §손목 1장 |
+| 2026-07-28 | **`"owner"` 과잉 차단 유지** — 별칭이 프로필 밖에서 해결되므로 예외 필요성 소멸. "우회할 이름을 찾지 말고 필요성을 되물어라" 규약 존속 | [UX 계약](planning-artifacts/ux-designs/ux-thinq-onme-2026-07-28/EXPERIENCE.md) §손목 1장 |
+| 2026-07-28 | **UX 계약 확정** — 주 계약 = 데모 CLI 프레젠테이션 층(대본 §6~§12 7장면 1:1), 제품 UI는 "손목 1장" 스케치만(미구현 표기). 미구현 화면 추가 창작 금지 | [DESIGN.md](planning-artifacts/ux-designs/ux-thinq-onme-2026-07-28/DESIGN.md)·[EXPERIENCE.md](planning-artifacts/ux-designs/ux-thinq-onme-2026-07-28/EXPERIENCE.md) |
+| 2026-07-28 | **페르소나 등급제(T1/T2/T3) + 타깃 이층 구조** — 근거 타깃 Night Keeper(T1) / 사업 타깃 30대 맞벌이(T2·H3). 무게중심 이동은 설문이 결정. 설문 v4(문4 세분·문7-1/7-2 신설) | [PERSONA_LADDER.md](PERSONA_LADDER.md)·SURVEY_PLAN v4 |
 
 ## ❓ 열린 질문 (사람 판단 대기 — 코드 결함 아님)
 
 | 질문 | 배경 | 출처 |
 |---|---|---|
-| 사용자 지정 **기기 별칭**("안방 에어컨")을 허용할 것인가 | `FORBIDDEN_KEY_FRAGMENTS`의 `"name"`이 `device_name`을 차단한다. 별칭은 UX상 필요할 수 있으나 **준식별자**이기도 하다. 허용한다면 어떤 이름으로 예외를 둘지가 설계 결정 | [1.1](implementation-artifacts/1-1-home-profile-schema.md) 미해결 질문 1 |
-| `"owner"` 차단의 **과잉 차단**을 유지할 것인가 | `device_owner_room` 같은 무해한 키까지 막는다. 현재는 과잉 차단을 택함("우회할 이름을 찾지 말고 필요성을 되물어라" 규약) | [1.1](implementation-artifacts/1-1-home-profile-schema.md) 미해결 질문 2 |
-
-> 둘 다 **UX 설계(bmad-ux)가 선행되어야** 판단 가능하다 — 화면에서 기기를 어떻게
-> 구분해 보여줄지가 정해져야 별칭 필요성이 확정된다. FR7(식별자 0) 주장과 직결되므로
-> 임의로 완화하지 말 것.
+| ~~사용자 지정 **기기 별칭** 허용 여부~~ | **닫힘 (2026-07-28)** — 로컬 표시층 전용 허용, 프로필 무변경. 위 결정표 참조 | UX 계약 |
+| ~~`"owner"` **과잉 차단** 유지 여부~~ | **닫힘 (2026-07-28)** — 유지. 위 결정표 참조 | UX 계약 |
+| **멀티 프로필 충돌·권한 모델** — 한 집에 두 워치·두 프로필이 같은 기기를 두고 선호가 다를 때 누가 이기는가 | Home Starter Couple 시나리오 3("Home Takes Care of Us")이 요구. Epic급 신규 설계 — 발표에선 "다음 단계"로만 발화 | [PERSONA_LADDER.md](PERSONA_LADDER.md) §3 |
 
 ## 운영 원칙 (미팅에서 확립)
 1. **주제가 수집·분석 스펙을 정한다** — 데이터량은 목표가 아니다.
