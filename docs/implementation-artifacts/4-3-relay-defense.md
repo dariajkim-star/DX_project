@@ -4,7 +4,7 @@ baseline_commit: 6da83a0
 
 # Story 4.3: 릴레이 공격 방어
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -37,56 +37,56 @@ so that "손목에 있으면 열린다"가 공격 표면이 되지 않는다.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: 근접 게이트 — `ProximityGuard`** (AC: 1)
-  - [ ] ⚠️ **기존 명령 계약을 깨지 마라.** `ApplianceState.apply_command`는 2.x부터
+- [x] **Task 1: 근접 게이트 — `ProximityGuard`** (AC: 1)
+  - [x] ⚠️ **기존 명령 계약을 깨지 마라.** `ApplianceState.apply_command`는 2.x부터
         토큰 없이 동작한다 — 여기에 토큰을 강제하면 기존 테스트가 전부 깨진다.
         근접 방어는 apply_command **앞단의 합성 가능한 게이트**로 얹는다(수정 아님)
-  - [ ] `home_profile/proximity.py` 신설 — 챌린지-응답 신선도(freshness) 기반
+  - [x] `home_profile/proximity.py` 신설 — 챌린지-응답 신선도(freshness) 기반
         재생 방어:
         · `issue_challenge()` → 신선한 nonce 발급(가전 측). 근접한 워치만 이 값을
           제때 받는다
         · `make_proximity_token(nonce)` → 근접 워치가 만드는 토큰(현재 nonce 바인딩)
         · `ProximityGuard.verify(token)` → 토큰 nonce가 **현재 챌린지와 일치 +
           미소비**여야 통과. 통과 시 nonce 소비(1회용) → 같은 토큰 재생은 거부
-  - [ ] 반환은 계약 승계: `(ok: bool, reason)` 또는 `(None, errors)`. **예외 금지**,
+  - [x] 반환은 계약 승계: `(ok: bool, reason)` 또는 `(None, errors)`. **예외 금지**,
         fail-closed(의심스러우면 거부). 거부 사유에 토큰 원문·페이로드 금지
-  - [ ] ⚠️ **막는 것과 못 막는 것을 코드 주석·docstring에 선명히.** 막는 것=replay
+  - [x] ⚠️ **막는 것과 못 막는 것을 코드 주석·docstring에 선명히.** 막는 것=replay
         (캡처 명령 재사용). 못 막는 것=실시간 relay(신선도 창 안 실시간 중계 —
         거리 바운딩 RTT 하드웨어 필요, 시뮬레이터 밖). 이 구분이 이 스토리의 정직성
 
-- [ ] **Task 2: 위협 모델 문서 — `docs/THREAT_MODEL.md`** (AC: 2)
-  - [ ] 릴레이 공격 위협 모델 1장. 구조: 위협(릴레이/재생) → 방어(챌린지-응답
+- [x] **Task 2: 위협 모델 문서 — `docs/THREAT_MODEL.md`** (AC: 2)
+  - [x] 릴레이 공격 위협 모델 1장. 구조: 위협(릴레이/재생) → 방어(챌린지-응답
         신선도) → **잔여 한계**(실시간 relay는 거리 바운딩 필요, 미구현). 완전
         방어 주장을 **명시적으로 부인**한다
-  - [ ] 방어 범위표: "막는다"(replay·stale nonce·wrong nonce) / "못 막는다"
+  - [x] 방어 범위표: "막는다"(replay·stale nonce·wrong nonce) / "못 막는다"
         (실시간 relay·물리적 근접 위조·손목 탈취 후 즉시 사용). `DEMO_SCRIPT §6`
         "말해도 되는 것/안 되는 것"과 같은 계보
-  - [ ] NFR1 계보: 이 방어는 "손목에 있으면 무조건 열린다"를 "손목에 있고 +
+  - [x] NFR1 계보: 이 방어는 "손목에 있으면 무조건 열린다"를 "손목에 있고 +
         신선한 챌린지에 실시간 응답해야 열린다"로 좁힌다. 완전 제거가 아니라 표면 축소
 
-- [ ] **Task 3: 릴레이 시나리오 데모** (AC: 1, 2)
-  - [ ] `demo_relay.py` 신설 — ①정상 근접 명령(현재 nonce 응답) → 성공 →
+- [x] **Task 3: 릴레이 시나리오 데모** (AC: 1, 2)
+  - [x] `demo_relay.py` 신설 — ①정상 근접 명령(현재 nonce 응답) → 성공 →
         가전 상태 전이. ②릴레이/재생(캡처한 명령을 nonce 회전 후 재현) → **거부**.
         두 결과를 나란히 화면에
-  - [ ] 화면에 **막는 것/못 막는 것**을 함께 표기 — 데모가 "완전 방어"로 읽히지
+  - [x] 화면에 **막는 것/못 막는 것**을 함께 표기 — 데모가 "완전 방어"로 읽히지
         않게(AC2 정직성). `THREAT_MODEL.md` 링크
-  - [ ] 배너 규약·참조 어댑터 정직 표기 유지. 실기기 아님
+  - [x] 배너 규약·참조 어댑터 정직 표기 유지. 실기기 아님
 
-- [ ] **Task 4: 테스트** (AC: 1, 2)
-  - [ ] `tests/test_relay_defense.py` 신설
-  - [ ] **정상 근접 성공(AC1 전제):** 현재 nonce에 바인딩된 토큰 → verify 통과 →
+- [x] **Task 4: 테스트** (AC: 1, 2)
+  - [x] `tests/test_relay_defense.py` 신설
+  - [x] **정상 근접 성공(AC1 전제):** 현재 nonce에 바인딩된 토큰 → verify 통과 →
         apply_command 성공(가전 상태 전이 정확한 값)
-  - [ ] **재생 거부(AC1):** 소비된 nonce의 토큰을 재사용 → verify 거부. apply까지
+  - [x] **재생 거부(AC1):** 소비된 nonce의 토큰을 재사용 → verify 거부. apply까지
         가지 않음(원자성 — 거부되면 상태 불변)
-  - [ ] **wrong nonce 거부(AC1):** 다른/옛 nonce 토큰 → 거부
-  - [ ] **신선도:** 챌린지 재발급 후 옛 토큰 → 거부(1회용 nonce 소비)
-  - [ ] **fail-closed:** garbage 토큰·None·형식 위반 → 거부, 예외 없음
-  - [ ] **잔여 한계 문서 회귀:** `THREAT_MODEL.md`에 "못 막는다/잔여 한계/실시간
+  - [x] **wrong nonce 거부(AC1):** 다른/옛 nonce 토큰 → 거부
+  - [x] **신선도:** 챌린지 재발급 후 옛 토큰 → 거부(1회용 nonce 소비)
+  - [x] **fail-closed:** garbage 토큰·None·형식 위반 → 거부, 예외 없음
+  - [x] **잔여 한계 문서 회귀:** `THREAT_MODEL.md`에 "못 막는다/잔여 한계/실시간
         relay/거리 바운딩" 취지 문구 존재 + "완전 방어" 무조건 주장 **부재** 단언
-  - [ ] 회귀 기준선: **369 passed**(`6da83a0`, 4.2 파티 리뷰 후). 신규만큼 증가·회귀 0
+  - [x] 회귀 기준선: **369 passed**(`6da83a0`, 4.2 파티 리뷰 후). 신규만큼 증가·회귀 0
 
-- [ ] **Task 5: 문서 — 발표 대본**
-  - [ ] `docs/DEMO_SCRIPT.md`에 릴레이 방어 장면(§11) 추가. `THREAT_MODEL.md` 링크.
+- [x] **Task 5: 문서 — 발표 대본**
+  - [x] `docs/DEMO_SCRIPT.md`에 릴레이 방어 장면(§11) 추가. `THREAT_MODEL.md` 링크.
         "막는 것/못 막는 것" 구분이 이 장면의 핵심(과장 방지)
 
 ## Dev Notes
@@ -162,13 +162,48 @@ nonce 재사용"으로 결정적으로 재현된다.
 
 ### Agent Model Used
 
-_(dev-story 실행 시 기록)_
+Claude Fable 5 (claude-fable-5) — 2026-07-23
 
 ### Debug Log References
 
+- 설계: `ProximityGuard`(가전 측 게이트) + `make_proximity_token`(워치 측 응답).
+  `issue_challenge`가 `secrets.token_hex(16)`로 신선한 nonce 발급, `verify`가
+  현재 챌린지 일치 + 미소비를 확인하고 통과 시 소비(1회용) → 재생 차단.
+  비교는 `secrets.compare_digest`(상수시간), 거부 사유에 토큰 원문 미노출.
+- **apply_command 무수정**(함정 2): 게이트는 앞단 합성 — 데모/테스트에서
+  verify 통과 후 기존 apply_command 호출. 2.x 명령 계약·기존 테스트 보존.
+- 결정성 확보(함정 4): 테스트가 `issue_challenge()` 반환값을 받아 토큰 생성 —
+  nonce 무작위성에 의존하지 않고 흐름만 검증. 재생은 "소비된 nonce 재사용"으로
+  결정적 재현.
+- 정직성 회귀: `test_threat_model_does_not_claim_complete_defense`가 "완전 방어"·
+  "완전히 막" 문구가 **부인 맥락 밖에서** 쓰이면 실패시킨다(무조건형 주장 차단).
+- GREEN: 10/10 첫 회 통과. 데모 exit 0.
+
 ### Completion Notes List
 
+- **Task 1**: `home_profile/proximity.py` — 챌린지-응답 신선도 게이트. replay 차단
+  (소비된 nonce·옛/위조 nonce·챌린지 재사용). 예외 금지·fail-closed. docstring에
+  막는 것(replay)/못 막는 것(실시간 relay, 거리 바운딩 필요) 선명히 구분.
+- **Task 2**: `docs/THREAT_MODEL.md` — 위협(replay/relay) → 방어(신선도) →
+  **잔여 한계**(실시간 relay 못 막음, 거리 바운딩 하드웨어 필요) + 방어 범위표
+  + 발표 시 말해도/안 되는 것. 완전 방어 명시적 부인.
+- **Task 3**: `demo_relay.py` — 정상 근접 성공 vs 재생 거부 2장면, 막는 것/못
+  막는 것 나란히 표기. 참조 어댑터·실기기 아님.
+- **Task 4**: `tests/test_relay_defense.py` 10개 — 정상 성공·재생 거부(상태 불변)·
+  stale/wrong nonce·챌린지 미발급·이중 사용·garbage fail-closed·문서 회귀 2건.
+- **Task 5**: `DEMO_SCRIPT.md` §11 릴레이 방어 + THREAT_MODEL 링크 + "완전히
+  막았다"를 금지 문구로 명시.
+
 ### File List
+
+- `home_profile/proximity.py` — 신규 (ProximityGuard·make_proximity_token)
+- `home_profile/__init__.py` — 수정 (심볼 2종 export)
+- `demo_relay.py` — 신규 (릴레이 방어 데모)
+- `tests/test_relay_defense.py` — 신규 (10 tests)
+- `docs/THREAT_MODEL.md` — 신규 (위협 모델, AC2)
+- `docs/DEMO_SCRIPT.md` — 수정 (시연 순서 11 + §11)
+- `docs/implementation-artifacts/4-3-relay-defense.md` — 본 파일
+- ※ `appliance_sim/`·`home_profile/schema.py`·`carrier.py`·`storage.py` **무수정**
 
 ### Change Log
 
@@ -176,3 +211,6 @@ _(dev-story 실행 시 기록)_
   핵심 신규 = `ProximityGuard`(챌린지-응답 신선도로 replay 방어) + 잔여 한계
   문서화(실시간 relay는 거리 바운딩 필요, 미구현). 완전 방어 주장 금지가 핵심.
   베이스라인 369 passed. Status: ready-for-dev.
+- 2026-07-23: Story 4.3 구현 완료 — ProximityGuard(replay 차단·1회용 nonce·
+  상수시간 비교), THREAT_MODEL.md(잔여 한계 명시·완전방어 부인), 데모·테스트 10개,
+  DEMO_SCRIPT §11. apply_command 무수정. Status: ready-for-dev → review.
