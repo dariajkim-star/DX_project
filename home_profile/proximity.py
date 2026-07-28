@@ -52,8 +52,15 @@ class ProximityGuard:
     """
 
     def __init__(self):
+        # 상태는 **현재 챌린지 하나뿐**이다(유계). 소비된 nonce 목록을 따로
+        # 들고 있던 v1은 무한히 자라면서 방어에는 기여하지 않았다(코드리뷰 파티
+        # 2026-07-23, Vex+Yui+Boundary): verify 통과 시 _current를 None으로 닫고
+        # issue_challenge가 매번 덮어쓰므로, 재생은 "발급된 챌린지 없음" 또는
+        # compare_digest 불일치에서 이미 거부된다. 워치급 메모리 예산(1.2)에
+        # 명령마다 32B가 영구 누적되는 구조를 올릴 수는 없다.
+        # ⚠️ 이 방어는 **_current를 소비 시 None으로 닫는 것**에 의존한다 —
+        # 그 계약은 test_relay_defense.py가 고정한다(리팩터로 깨지면 즉시 실패).
         self._current = None       # 현재 유효한(미소비) 챌린지 nonce
-        self._used = set()         # 이미 소비된 nonce (재생 차단)
 
     def issue_challenge(self):
         """신선한 nonce 발급. 근접한 워치만 이 값을 제때 받는다.
@@ -77,14 +84,13 @@ class ProximityGuard:
             nonce = token.get("nonce")
             if not isinstance(nonce, str):
                 return False, "토큰 nonce 형식 위반"
-            if nonce in self._used:
-                # 재생: 이미 소비된 nonce의 토큰을 다시 냈다.
-                return False, "소비된 nonce — 재생(replay) 거부"
             # 상수시간 비교: nonce 원문을 되뱉지 않고 일치만 본다.
+            # 재생(소비된 nonce 재사용)은 아래 소비 처리로 _current가 None이 되어
+            # 다음 호출에서 "발급된 챌린지 없음"으로, 챌린지가 회전했다면
+            # 불일치로 거부된다 — 별도 소비 목록 없이 유계 상태로 막는다.
             if not secrets.compare_digest(nonce, self._current):
-                return False, "nonce 불일치 — 옛/위조 챌린지 거부"
-            # 통과 — 소비 처리(1회용). 현재 챌린지를 닫는다.
-            self._used.add(nonce)
+                return False, "nonce 불일치 — 옛/위조 챌린지 거부(재생 포함)"
+            # 통과 — 소비 처리(1회용). **현재 챌린지를 닫는 것이 재생 방어의 핵심.**
             self._current = None
             return True, "근접 증명 통과"
         except Exception as e:   # fail-closed

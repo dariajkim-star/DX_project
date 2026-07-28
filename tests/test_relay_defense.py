@@ -97,6 +97,33 @@ def test_double_use_of_same_challenge_rejected():
 
 # ---------- fail-closed ----------
 
+def test_guard_state_is_bounded():
+    """파티 리뷰(Vex+Yui): 게이트 상태는 유계여야 한다 — 명령마다 nonce가 영구
+    누적되면 워치급 메모리 예산(1.2)을 먹는다. 소비 목록 없이 현재 챌린지 하나로
+    방어가 성립함을 고정."""
+    guard = ProximityGuard()
+    for _ in range(200):
+        nonce = guard.issue_challenge()
+        ok, _ = guard.verify(make_proximity_token(nonce))
+        assert ok
+    # 인스턴스가 들고 있는 것은 현재 챌린지(소비되어 None)뿐 — 누적 컬렉션 없음
+    sizes = [len(v) for v in vars(guard).values()
+             if isinstance(v, (set, list, dict))]
+    assert sizes == [] or max(sizes) <= 1
+
+
+def test_consumed_challenge_closes_the_window():
+    """재생 방어의 핵심 계약: verify 통과 시 현재 챌린지가 닫힌다.
+    이게 깨지면 소비된 nonce가 다시 통과하므로 리팩터 가드로 고정한다."""
+    guard = ProximityGuard()
+    nonce = guard.issue_challenge()
+    token = make_proximity_token(nonce)
+    assert guard.verify(token)[0] is True
+    # 챌린지가 닫혔으므로 같은 토큰도, 새 토큰도 통과하지 못한다
+    assert guard.verify(token)[0] is False
+    assert guard.verify(make_proximity_token(nonce))[0] is False
+
+
 def test_verify_never_raises_on_garbage():
     guard = ProximityGuard()
     guard.issue_challenge()

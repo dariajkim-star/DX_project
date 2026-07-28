@@ -4,7 +4,7 @@ baseline_commit: 10b344e
 
 # Story 4.4: 분실·양도 시 프로필 폐기
 
-Status: review
+Status: done
 
 ## Story
 
@@ -102,6 +102,23 @@ so that 내 집이 남의 손목에 남지 않는다.
   - [x] `docs/DEMO_SCRIPT.md`에 폐기 장면(§12) 추가 — "잃어버리면요?"의 답
   - [x] `docs/THREAT_MODEL.md`에 폐기 연결 1절 — 4.3이 잔여 한계로 남긴 "손목
         탈취 후 즉시 사용"에 대한 부분적 답(폐기 + 워치 PIN)과 그 한계
+
+### Review Findings (party code-review 2026-07-23 · Code Review Crew)
+
+- [x] [Review][Patch] **부분 폐기 잔류를 검증이 놓친다** [home_profile/revoke.py]
+      — Grumbal 재현·Vex·Boundary 확인. 복원은 meta부터 읽으므로 meta만 지워지고
+      device 레코드가 남은 상태에서도 `restorable_after=False`(=성공)가 나온다.
+      **개인 데이터가 워치에 남았는데 "폐기 성공"으로 오보** — 4.1 파티가 잡은
+      유령 레코드와 같은 병의 재발이며, 4.4의 자랑인 "실측 검증"이 틀린 답을 냈다.
+      해법(Yui·Vex): "복원 불가"와 "잔류 0"은 **다른 주장**이므로 축을 분리해
+      `residual_records`를 추가하고 **둘 다** 만족해야 폐기 선언. **적용됨**
+- [x] [Review][Patch] meta 없는 **고아 잔류**는 이름 재구성 불가로 탐지·삭제 불가
+      [home_profile/revoke.py] — Boundary+Grumbal. 근본 원인은 Carrier에 '전체
+      나열'이 없다는 것(캐리어 중립 계약이라 불변). 잔류 수를 0이 아니라
+      **None(판정 불가)**으로 보고해 세탁하지 않고, REVOCATION.md에 **사용자
+      조치(수동 워치 초기화)**를 명시. Grumbal 요구("탐지되면 말은 해줘야지")
+      반영. **적용됨**
+- 회귀 3건 추가: 부분 폐기 잔류 탐지, 정상 폐기 잔류 0(실측), 고아 잔류 None 보고.
 
 ## Dev Notes
 

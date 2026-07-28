@@ -34,6 +34,29 @@ from .storage import restore_from_carrier
 __all__ = ["revoke_onbody"]
 
 
+def _count_residue(carrier, names):
+    """폐기 대상 이름 중 **아직 살아있는** 레코드 수. 반환 (count, ok).
+
+    ok=False는 조회 자체가 불가해 잔류를 판정하지 못했다는 뜻이다(모르는 것을
+    0으로 세탁하지 않는다 — NFR6). 이름은 원문으로 보고하지 않고 개수만 센다.
+
+    `get_records`는 하나라도 없으면 (None, errors)를 주므로(반쪽 결과 없음),
+    한 번에 묻지 않고 이름마다 개별 조회한다 — '전부 없음'과 '일부 남음'을
+    구분해야 하기 때문이다.
+    """
+    if not names:
+        return 0, True
+    alive = 0
+    for n in names:
+        try:
+            got, _errs = carrier.get_records([n])
+        except Exception:
+            return None, False
+        if got:
+            alive += 1
+    return alive, True
+
+
 def revoke_onbody(carrier):
     """온바디 프로필을 폐기한다. 반환 (ok: bool, report). **예외 금지**.
 
@@ -41,9 +64,15 @@ def revoke_onbody(carrier):
     Carrier 프로토콜엔 '전체 나열'이 없으므로(capabilities/put/get/erase뿐)
     meta의 device_refs·routine_count로 이름을 재구성한다(3.1 복원과 같은 패턴).
     """
+    # ⚠️ "복원 불가"와 "잔류 0"은 **다른 주장**이다(코드리뷰 파티 2026-07-23,
+    # Grumbal 재현). 복원은 meta부터 읽으므로 meta만 지워지면 복원은 실패하지만
+    # device/routine 레코드는 워치에 남을 수 있다 — 그 상태를 '폐기 성공'으로
+    # 보고하면 프라이버시 스토리의 핵심 주장이 거짓이 된다(4.1 유령 레코드와
+    # 같은 병). 두 축을 분리해 **둘 다** 만족해야 폐기를 선언한다.
     report = {
         "records_erased": 0,
         "restorable_after": None,     # 실측 — 폐기 후 복원 시도 결과(리터럴 아님)
+        "residual_records": None,     # 실측 — 폐기 후 살아남은 레코드 **개수**
         "server_required": False,     # 구조적 사실: 이 경로에 네트워크 호출 없음
         "errors": [],
     }
@@ -68,7 +97,15 @@ def revoke_onbody(carrier):
             if report["restorable_after"]:
                 report["errors"].append("meta 없이 복원 가능 — 폐기 상태 판정 불가")
                 return False, report
-            report["errors"].append("폐기할 프로필 없음(이미 폐기되었거나 빈 캐리어)")
+            # ⚠️ meta가 없으면 지울 이름을 재구성할 수 없다 — 고아 잔류(device:*가
+            # 남았는데 meta는 없는 상태)를 이 경로에서는 **탐지도 삭제도 못 한다**.
+            # Carrier 프로토콜에 '전체 나열'이 없는 것이 근본 원인이며(캐리어 중립
+            # 계약이라 못 건드림), 그래서 잔류 수를 0이 아니라 **None(판정 불가)**로
+            # 남긴다. 사용자 조치는 REVOCATION.md 잔여 한계 참조(수동 워치 초기화).
+            report["residual_records"] = None
+            report["errors"].append(
+                "폐기할 프로필 없음(이미 폐기되었거나 빈 캐리어) — "
+                "meta 부재로 고아 잔류는 판정 불가")
             return True, report
 
         import json
@@ -96,11 +133,23 @@ def revoke_onbody(carrier):
         else:
             report["records_erased"] = len(names)
 
-        # 3) **검증**: 복원이 실패해야 폐기다. erase 성공 보고만 믿지 않는다.
+        # 3) **검증 — 두 축 모두.** erase 성공 보고만 믿지 않는다.
+        #    ① 복원 불가: 그 프로필로 가전을 못 연다(AC1의 문면)
+        #    ② 잔류 0: 워치에 개인 데이터가 남지 않았다(온바디 프라이버시)
+        #    ①만 보면 meta만 지워진 부분 폐기를 성공으로 오보한다(파티 Grumbal).
         restored, r_errs = restore_from_carrier(carrier)
         report["restorable_after"] = bool(not r_errs and restored is not None)
+        residue, measured = _count_residue(carrier, names)
+        report["residual_records"] = residue      # 판정 불가면 None(0으로 세탁 금지)
         if report["restorable_after"]:
             report["errors"].append("폐기 후에도 복원 가능 — 폐기 실패(잔류)")
+            return False, report
+        if not measured:
+            report["errors"].append("잔류 여부 판정 불가 — 폐기 미확인")
+            return False, report
+        if residue:
+            report["errors"].append(
+                f"복원은 불가하나 레코드 {residue}건 잔류 — 폐기 미완결")
             return False, report
         return (not report["errors"]), report
     except Exception as e:   # fail-closed

@@ -4,7 +4,7 @@ baseline_commit: 6da83a0
 
 # Story 4.3: 릴레이 공격 방어
 
-Status: review
+Status: done
 
 ## Story
 
@@ -88,6 +88,20 @@ so that "손목에 있으면 열린다"가 공격 표면이 되지 않는다.
 - [x] **Task 5: 문서 — 발표 대본**
   - [x] `docs/DEMO_SCRIPT.md`에 릴레이 방어 장면(§11) 추가. `THREAT_MODEL.md` 링크.
         "막는 것/못 막는 것" 구분이 이 장면의 핵심(과장 방지)
+
+### Review Findings (party code-review 2026-07-23 · Code Review Crew)
+
+크루: 🔒Vex(보안) 😤Grumbal(어드버서리) 🌶️Boundary(엣지) 🎯Yui(장인) 🚢Dana(실용)
+
+- [x] [Review][Patch] `_used` set이 **무한 증가하는데 방어에 기여하지 않음**
+      [home_profile/proximity.py] — Vex+Yui+Boundary. verify 통과 시
+      `_current=None`으로 닫고 `issue_challenge`가 매번 덮어쓰므로 재생은
+      "발급된 챌린지 없음"·compare_digest 불일치에서 이미 거부된다. 그런데
+      명령마다 nonce 32B가 영구 누적 — **워치급 메모리 예산(1.2) 위협**이자
+      4.1에서 잡은 죽은 이중방어와 같은 종류. 제거하고, 방어가 의존하는 계약
+      ("소비 시 _current를 닫는다")을 회귀 테스트로 고정. **적용됨**
+      · Grumbal 반론("지우면 리팩터로 뚫린다") → Vex 착지: 무한 메모리 대신
+        **테스트로 계약 고정**이 옳다. `test_consumed_challenge_closes_the_window`
 
 ## Dev Notes
 

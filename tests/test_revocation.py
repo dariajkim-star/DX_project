@@ -156,6 +156,49 @@ def test_revoke_twice_is_safe():
     assert report2["restorable_after"] is False
 
 
+# ---------- 파티 리뷰 회귀: 부분 폐기 잔류 ----------
+
+class _PartialEraseCarrier(MemoryCarrier):
+    """erase가 meta만 지우고 나머지를 남기는 캐리어 — 부분 폐기 재현."""
+
+    def erase(self, names):
+        self._store = {k: v for k, v in self._store.items() if k != "meta"}
+        return ["부분 삭제 실패"]
+
+
+def test_partial_erase_residue_is_detected():
+    """파티 리뷰(Grumbal 재현): 복원은 meta부터 읽으므로 meta만 지워지면
+    restorable_after=False가 나온다 — 그런데 device 레코드는 워치에 남아 있다.
+    '복원 불가'와 '잔류 0'은 다른 주장이며, 폐기는 **둘 다** 만족해야 한다."""
+    carrier = _PartialEraseCarrier()
+    profile, rep = onboard_local(_devices(), carrier)
+    assert profile is not None and rep["errors"] == []
+
+    ok, report = revoke_onbody(carrier)
+    assert ok is False                                   # 폐기 실패로 보고
+    assert report["restorable_after"] is False           # 복원은 실제로 불가
+    assert report["residual_records"] == len(_devices())  # 그러나 잔류가 남았다
+    assert carrier._store                                # 실제로 남아 있음
+
+
+def test_clean_revoke_reports_zero_residue():
+    _, carrier = _onboarded()
+    ok, report = revoke_onbody(carrier)
+    assert ok
+    assert report["residual_records"] == 0               # 실측 0
+
+
+def test_orphan_residue_without_meta_is_not_laundered_to_zero():
+    """Boundary 지적: meta 없이 device만 남으면 이름을 재구성할 수 없어
+    탐지도 삭제도 불가 — 그 사실을 0으로 세탁하지 않고 None(판정 불가)로 남긴다."""
+    carrier = _PartialEraseCarrier()
+    onboard_local(_devices(), carrier)
+    revoke_onbody(carrier)                               # meta만 삭제, 고아 잔류 발생
+    ok, report = revoke_onbody(carrier)                  # 다시 폐기 시도
+    assert report["residual_records"] is None            # 0이 아니라 '판정 불가'
+    assert any("판정 불가" in e for e in report["errors"])
+
+
 # ---------- 문서 회귀 ----------
 
 def test_revocation_doc_defines_recovery_and_limits():

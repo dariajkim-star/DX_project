@@ -88,6 +88,9 @@ def main(argv=None) -> int:
     _emit(f"  레코드 {rep['records_erased']}개 삭제")
     _emit(f"  폐기 후 복원 가능: {_yn(rep['restorable_after'])}  "
           f"← 지웠다는 보고가 아니라 **복원 시도로 검증**")
+    residue = rep["residual_records"]
+    _emit(f"  잔류 레코드: {'판정 불가' if residue is None else f'{residue}건'}  "
+          f"← '복원 불가'와 '잔류 0'은 다른 주장이라 **둘 다** 확인한다")
 
     # 장면 3: 폐기 후 — 제어 불가
     _emit()
