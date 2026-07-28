@@ -4,7 +4,7 @@ baseline_commit: c77540ddbfaf5e5ea23edadc507c7597c30cf2f7
 
 # Story 1.1: 홈 프로필 스키마 정의
 
-Status: review
+Status: done
 
 ## Story
 
@@ -267,6 +267,7 @@ claude-fable-5 (Claude Fable 5)
 | 2026-07-22 | Story 1.1 구현 — 홈 프로필 스키마 v1.0.0 + 회귀 테스트 23건 + 스키마 명세 문서. 전체 테스트 78 passed |
 | 2026-07-22 | **Code Review Crew 평결: changes-requested.** AC2·AC3·AC4 미충족 재판정. PROFILE_SCHEMA.md §2·§4의 거짓 보증 문구 철회·정정 |
 | 2026-07-22 | **리뷰 반영 v2 재작성.** 스키마·테스트 전면 재작성 — 리뷰 우회 14건 전수 차단 확인, 스텁 판별 테스트(스텁 13건 FAIL), 전체 87 passed. 상태 review 복귀 |
+| 2026-07-23 | **done 확정.** v2 재작성으로 평결 지적은 해소됐고, 이후 1.2·1.3·Epic 2~4가 이 스키마 위에 서서 396 passed로 계속 검증 중(validate_profile·find_identifier_violations가 3.1 복원·4.1 온보딩·4.4 폐기의 게이트). 남은 '미해결 질문' 2건(기기 별칭 허용 여부·`owner` 과잉 차단)은 **코드 결함이 아니라 사람 판단 설계 결정**이라 DECISIONS.md '열린 질문'으로 이관. 추가 코드 변경 없음 |
 
 ## Senior Developer Review (AI)
 

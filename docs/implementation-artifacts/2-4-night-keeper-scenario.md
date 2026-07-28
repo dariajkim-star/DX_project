@@ -4,7 +4,7 @@ baseline_commit: 763c6ff
 
 # Story 2.4: Night Keeper 야간 모드 시나리오
 
-Status: review
+Status: done
 
 ## Story
 
@@ -246,6 +246,9 @@ Claude Opus 4.8 (claude-opus-4-8) — 2026-07-22
   정직 표기(인구통계 미검증 라벨 + 날조 회귀 방지). **home_profile 무수정**.
   **296 passed** (신규 13, 회귀 0). **Epic 2 완료.**
   Status: ready-for-dev → review.
+- 2026-07-23: **done 확정.** 유일한 미결이던 "사람 결정 대기: ble_bless 존치"가
+  비준 완료(미구현 표기 유지, DECISIONS.md 등재)되어 잔여 항목 없음. 야간 시나리오
+  코드·페르소나 정직 표기는 이후 Epic 3~4에서도 회귀로 유지 중(396 passed).
 
 ### 사람 결정 대기 (Epic 2 완료 — 올릴 시점)
 
