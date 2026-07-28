@@ -204,9 +204,9 @@ v3 인코딩 주의:
 | (예비) 네이버 IoT·스마트홈 카페 | G3 | 로컬 제어 수요 실존 증인 |
 
 ## 6. 남은 일
-- [ ] **v2 파일럿 응답 4건 삭제**(백업 `docs/survey_responses_v2_backup.md`) → `applyV3()` 실행
-- [ ] **`applyV4()` → `verifyForm()` + `verifyFormV4()`** — FAIL 0 확인 후 배포 (v4, 2026-07-28)
-- [ ] `survey_encode.py` 문4 신보기 매핑 추가 (신혼·동거 2인/부부 2인 → 무자녀 흡수)
+- [x] **v2 파일럿 응답 4건 삭제**(백업 `docs/survey_responses_v2_backup.md`) → `applyV3()` 실행
+- [x] **`applyV4()` → `verifyForm()` + `verifyFormV4()`** — **FAIL 0 확인, 2026-07-28 본배포 완료** (daria)
+- [x] `survey_encode.py` v4 호환 확인 — 코드 변경 불필요(자녀유무 자동 흡수), 주석 추가
 - [ ] 파일럿 3명 — **G1 유자녀 1명 + G2 신혼 2명**(v3.1: G1이 0명이면 문11-2·11-3이
       핵심 타겟에게 한 번도 안 읽힌 채 배포된다) → 문구 확정 → 채널 배포
 - [ ] 응답 수집 → `data/survey.csv` → `04_segmentation.py` 실행
