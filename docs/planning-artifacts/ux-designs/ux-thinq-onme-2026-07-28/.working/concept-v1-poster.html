@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Quietly Home V1 — 한 문장 포스터</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    background:#111; display:flex; justify-content:center; padding:40px 16px;
+  }
+  .board {
+    width:960px; max-width:100%; aspect-ratio:16/9; position:relative;
+    background:linear-gradient(160deg,#2b2018 0%,#1a130e 55%,#120d09 100%);
+    border-radius:14px; overflow:hidden; color:#f4ece2;
+    display:flex; flex-direction:column; justify-content:center; padding:0 8%;
+  }
+  /* 저녁의 따뜻한 집 — 창문 불빛 암시 */
+  .glow {
+    position:absolute; right:-8%; top:-12%; width:52%; height:75%;
+    background:radial-gradient(ellipse at 60% 40%, rgba(255,176,110,.32), transparent 65%);
+  }
+  .door {
+    position:absolute; right:12%; top:18%; width:120px; height:64%;
+    border:1.5px solid rgba(255,205,160,.35); border-radius:6px 6px 0 0;
+    background:linear-gradient(180deg, rgba(255,190,130,.10), rgba(255,190,130,.03));
+  }
+  .door::after { /* 문틈으로 새는 빛 */
+    content:""; position:absolute; right:-14px; top:8%; width:3px; height:84%;
+    background:linear-gradient(180deg, rgba(255,205,150,.7), rgba(255,205,150,.08));
+    filter:blur(1px);
+  }
+  .brand { font-size:15px; letter-spacing:.14em; color:#c9a07a; margin-bottom:26px; }
+  .brand b { color:#e8543f; font-weight:600; }  /* LG Red — 아주 조금 */
+  h1 { font-size:44px; font-weight:700; line-height:1.32; letter-spacing:-.01em; }
+  h1 .temp { color:#e8543f; font-variant-numeric:tabular-nums; }
+  .sub { margin-top:20px; font-size:17px; color:#bfae9c; line-height:1.7; }
+  .honest {
+    position:absolute; left:8%; right:8%; bottom:26px; display:flex;
+    justify-content:space-between; align-items:flex-end; font-size:11.5px; color:#8a7a68;
+  }
+  .honest .tags span { margin-right:14px; }
+  .honest .tags span::before { content:"— "; color:#6b5c4c; }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="glow"></div>
+  <div class="door"></div>
+  <div class="brand">Quietly <b>Home</b></div>
+  <h1>늦게 돌아와도,<br>내가 편한 <span class="temp">22°</span>로.</h1>
+  <p class="sub">손목에서 한 번. 방은 어둡게, 온도는 내 선호대로.<br>
+     설정은 한 번 — 집이 바뀌어도, 지원되는 기기 기준으로 이어집니다.</p>
+  <div class="honest">
+    <div class="tags">
+      <span>원터치</span><span>감지 아님</span><span>위치 추적 없음</span><span>배우자 상태 공유 없음</span>
+    </div>
+    <div>컨셉 이미지 — 구현 화면 아님 · Home Starter Couple — 가설, 설문 검증 대기</div>
+  </div>
+</div>
+</body>
+</html>

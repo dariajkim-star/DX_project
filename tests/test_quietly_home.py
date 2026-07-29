@@ -25,11 +25,11 @@ def test_runs_clean(capsys):
 
 
 def test_preferences_survive_move_individually(capsys):
-    """이사 후 26(귀가자)·24(먼저 잔 사람) **둘 다 실행 실측**으로 생존 (GPT F3)."""
+    """이사 후 22(귀가자)·24(먼저 잔 사람) **둘 다 실행 실측**으로 생존 (GPT F3)."""
     rc, out = _run(capsys)
     assert rc == 0
     scene4 = out.split("장면 4")[1]
-    assert "target_temp: 26" in scene4               # 귀가자의 원터치 실행 실측
+    assert "target_temp: 22" in scene4               # 귀가자의 원터치 실행 실측
     assert "target_temp: 24" in scene4               # 먼저 잔 사람도 실행 실측 (표시 아님)
     assert "재설정 0회" in out
 

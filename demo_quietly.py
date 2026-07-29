@@ -161,7 +161,7 @@ def main(argv=None) -> int:
 
     # 장면 1: 옛 집 — 두 프로필, 한 번 새김
     asleep = build_couple_profile(temp=24)     # 먼저 잔 사람의 선호
-    returner = build_couple_profile(temp=26)   # 늦게 귀가한 사람의 선호
+    returner = build_couple_profile(temp=22)   # 늦게 귀가한 사람의 선호
     for p, who in ((asleep, "먼저 잔 사람"), (returner, "늦게 귀가한 사람")):
         if validate_profile(p):
             _emit(f"[{SIMULATOR_BANNER}] {who} 프로필 조립 오류")
@@ -173,14 +173,14 @@ def main(argv=None) -> int:
         return 1
     _emit(f"  먼저 잔 사람 워치: '조용한 귀가' 새김 (선호 24도) · "
           f"{len(serialize(asleep)[0]):,}B")
-    _emit(f"  늦게 귀가한 사람 워치: 같은 루틴, 다른 값 (선호 26도) · "
+    _emit(f"  늦게 귀가한 사람 워치: 같은 루틴, 다른 값 (선호 22도) · "
           f"{len(serialize(returner)[0]):,}B")
 
     # 장면 2: 옛 집 — 늦게 귀가한 사람의 원터치
     demo_ui.scene_header("장면 2: 옛 집 — 늦게 귀가, 현관 앞 원터치", SIMULATOR_BANNER)
     old_appliances = {ref: ApplianceState(ref, dtype, caps)
                       for ref, dtype, caps in _OLD_DEVICES}
-    if not _one_touch(c_return, old_appliances, "옛 집", expected_temp=26):
+    if not _one_touch(c_return, old_appliances, "옛 집", expected_temp=22):
         return 1
 
     # 장면 3: 이사 — 각자의 프로필이 각자 새 집에 매핑된다
@@ -220,7 +220,7 @@ def main(argv=None) -> int:
     # 장면 4: 새 집 — 재설정 0회, 같은 원터치, **두 사람 다 실행으로 증명** (F3)
     demo_ui.scene_header("장면 4: 새 집 — 재설정 0회, 같은 원터치", SIMULATOR_BANNER)
     for who, temp, subtitle in (
-            ("늦게 귀가한 사람", 26, "이사 첫날 밤, 현관 앞"),
+            ("늦게 귀가한 사람", 22, "이사 첫날 밤, 현관 앞"),
             ("먼저 잔 사람", 24, "다음날, 이번엔 이 사람이 늦다")):
         c_new = _persist(mapped[who], f"{who} 새 워치")
         if c_new is None:

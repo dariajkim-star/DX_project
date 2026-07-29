@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Quietly Home V2 — 워치 클로즈업</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    background:#111; display:flex; justify-content:center; padding:40px 16px;
+  }
+  .board {
+    width:960px; max-width:100%; aspect-ratio:16/9; position:relative;
+    background:linear-gradient(135deg,#f7f1e8 0%,#efe4d5 100%);
+    border-radius:14px; overflow:hidden; color:#2b2018;
+    display:grid; grid-template-columns:1fr 1fr; align-items:center;
+  }
+  .copy { padding:0 7%; }
+  .brand { font-size:14px; letter-spacing:.14em; color:#a9835f; margin-bottom:22px; }
+  .brand b { color:#e8543f; font-weight:600; }
+  h1 { font-size:36px; font-weight:700; line-height:1.35; }
+  .sub { margin-top:16px; font-size:15.5px; color:#7d6b58; line-height:1.75; }
+  .sub em { font-style:normal; color:#4a3a2c; font-weight:600; }
+
+  /* 라운드 워치 — 가민 계열 실루엣 (사각 애플워치 아님) */
+  .stage { display:flex; justify-content:center; }
+  .watch {
+    width:300px; height:300px; border-radius:50%;
+    background:#0d0b09; border:12px solid #cfc2b0;
+    box-shadow:0 24px 60px rgba(60,40,20,.25), inset 0 0 30px rgba(255,255,255,.04);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; color:#f4ece2; position:relative;
+  }
+  .watch .time { font-size:12px; color:#6f6154; letter-spacing:.1em; }
+  .btn {
+    width:150px; height:150px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #f0684f, #d84a35);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; box-shadow:0 8px 24px rgba(216,74,53,.45);
+  }
+  .btn .moon { font-size:20px; }
+  .btn .label { font-size:17px; font-weight:700; }
+  .watch .result { font-size:14px; color:#d8c8b4; }
+  .watch .result b { color:#fff; font-variant-numeric:tabular-nums; }
+  .lug { position:absolute; left:50%; transform:translateX(-50%);
+         width:74px; height:26px; background:#cfc2b0; z-index:-1; }
+  .lug.top { top:-34px; border-radius:10px 10px 0 0; }
+  .lug.bot { bottom:-34px; border-radius:0 0 10px 10px; }
+
+  .honest {
+    position:absolute; left:6%; right:6%; bottom:22px; display:flex;
+    justify-content:space-between; font-size:11.5px; color:#a08c76;
+  }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="copy">
+    <div class="brand">Quietly <b>Home</b></div>
+    <h1>버튼 하나.<br>결과 하나.</h1>
+    <p class="sub">현관 앞에서 <em>내가 누릅니다</em> — 집이 알아채는 게 아니라.<br>
+       조명은 켜지지 않고, 에어컨은 내 온도로.<br>
+       자는 사람의 밤은 그대로.</p>
+  </div>
+  <div class="stage">
+    <div class="watch">
+      <div class="lug top"></div><div class="lug bot"></div>
+      <div class="time">10:09</div>
+      <div class="btn"><div class="moon">🌙</div><div class="label">조용한 귀가</div></div>
+      <div class="result">내 온도 <b>22°</b></div>
+    </div>
+  </div>
+  <div class="honest">
+    <div>원터치 — 감지 아님 · 위치 추적 없음 · 배우자 상태 공유 없음</div>
+    <div>컨셉 이미지 — 구현 화면 아님 · 가설, 설문 검증 대기</div>
+  </div>
+</div>
+</body>
+</html>

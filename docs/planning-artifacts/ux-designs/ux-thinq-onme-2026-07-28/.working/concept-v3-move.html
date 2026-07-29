@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Quietly Home V3 — 이사 딥틱</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    background:#111; display:flex; justify-content:center; padding:40px 16px;
+  }
+  .board {
+    width:960px; max-width:100%; aspect-ratio:16/9; position:relative;
+    background:#17110c; border-radius:14px; overflow:hidden; color:#f4ece2;
+    display:flex; flex-direction:column;
+  }
+  .head { text-align:center; padding:44px 0 8px; }
+  .brand { font-size:13px; letter-spacing:.14em; color:#c9a07a; margin-bottom:14px; }
+  .brand b { color:#e8543f; }
+  h1 { font-size:30px; font-weight:700; }
+  h1 .keep { color:#e8543f; }
+  .sub { margin-top:10px; font-size:14px; color:#a3907c; }
+
+  .diptych {
+    flex:1; display:grid; grid-template-columns:1fr 88px 1fr;
+    align-items:center; padding:12px 6% 0;
+  }
+  .house {
+    border-radius:12px; padding:26px 24px 22px; position:relative; min-height:190px;
+    background:linear-gradient(170deg,#241a12,#1b130d);
+    border:1px solid rgba(255,205,160,.14);
+  }
+  .house .tag { font-size:12px; color:#8a7a68; margin-bottom:14px; letter-spacing:.06em; }
+  .house .roof { /* 지붕 실루엣 */
+    position:absolute; top:-1px; left:24px; width:40px; height:22px;
+    border-left:1.5px solid rgba(255,205,160,.35);
+    border-top:1.5px solid rgba(255,205,160,.35);
+    transform:skewX(-32deg); border-radius:3px 0 0 0;
+  }
+  .row { display:flex; justify-content:space-between; align-items:baseline;
+         padding:9px 2px; border-bottom:1px dashed rgba(255,255,255,.07);
+         font-size:14.5px; }
+  .row:last-child { border-bottom:none; }
+  .row .v { color:#ffb27a; font-variant-numeric:tabular-nums; }
+  .row.held { color:#8a7a68; font-size:12.5px; }
+  .row.held .v { color:#c9a45e; }
+
+  .bridge { text-align:center; color:#e8543f; }
+  .bridge .arrow { font-size:26px; }
+  .bridge .once { font-size:11px; color:#a3907c; margin-top:6px; line-height:1.5; }
+
+  .persons {
+    display:flex; justify-content:center; gap:36px; padding:14px 0 6px;
+    font-size:13px; color:#bfae9c;
+  }
+  .persons b { color:#f4ece2; font-variant-numeric:tabular-nums; }
+  .honest {
+    display:flex; justify-content:space-between; padding:0 6% 22px;
+    font-size:11px; color:#77685a;
+  }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="head">
+    <div class="brand">Quietly <b>Home</b></div>
+    <h1>집이 바뀌어도, <span class="keep">내 선호는 그대로.</span></h1>
+    <div class="sub">설정은 한 번 — 지원되는 기기 기준으로 이어지고, 안 되는 건 이유와 함께 남습니다.</div>
+  </div>
+  <div class="diptych">
+    <div class="house">
+      <div class="roof"></div>
+      <div class="tag">이사 전 집</div>
+      <div class="row"><span>🌙 조용한 귀가 새김</span><span class="v">한 번</span></div>
+      <div class="row"><span>에어컨</span><span class="v">내 온도</span></div>
+      <div class="row"><span>조명</span><span class="v">켜지지 않음</span></div>
+    </div>
+    <div class="bridge">
+      <div class="arrow">→</div>
+      <div class="once">손목이<br>옮긴다</div>
+    </div>
+    <div class="house">
+      <div class="roof"></div>
+      <div class="tag">새로운 집</div>
+      <div class="row"><span>🌙 같은 원터치</span><span class="v">재설정 없이</span></div>
+      <div class="row"><span>에어컨</span><span class="v">내 온도 그대로</span></div>
+      <div class="row held"><span>세탁기·청소기</span><span class="v">이 집엔 없어 보류</span></div>
+    </div>
+  </div>
+  <div class="persons">
+    <span>늦게 귀가한 사람 <b>22°</b></span>
+    <span>먼저 잔 사람 <b>24°</b></span>
+    <span>— 각자의 손목에, 각자의 값</span>
+  </div>
+  <div class="honest">
+    <div>원터치 — 감지 아님 · 위치 추적 없음 · 배우자 상태 공유 없음</div>
+    <div>컨셉 이미지 — 구현 화면 아님 · Home Starter Couple — 가설, 설문 검증 대기</div>
+  </div>
+</div>
+</body>
+</html>
