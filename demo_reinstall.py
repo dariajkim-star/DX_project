@@ -21,7 +21,8 @@ storage가 제공하고, 여기서는 장면만 조립한다.
 import argparse
 import sys
 
-from appliance_sim.core import SIMULATOR_BANNER, console_safe
+import demo_ui
+from appliance_sim.core import SIMULATOR_BANNER
 from home_profile import (
     MemoryCarrier,
     persist_to_carrier,
@@ -34,8 +35,7 @@ from home_profile import storage as st
 PAIN = "핸드폰 초기화 하고 재설치 하니... 제품이 전부 없어짐"
 
 
-def _emit(line=""):
-    print(console_safe(line))
+_emit = demo_ui.emit
 
 
 def main(argv=None) -> int:
@@ -47,10 +47,7 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     # 경계 1: 기동 헤더 — 배너 1회
-    _emit("=" * 62)
-    _emit(f"  {SIMULATOR_BANNER}")
-    _emit(f"  재설치 복원 — P-2 반박: \"{PAIN}\"")
-    _emit("=" * 62)
+    demo_ui.title_block(SIMULATOR_BANNER, f"재설치 복원 — P-2 반박: \"{PAIN}\"")
 
     # 장면 1: 등록 완료 상태 — 프로필을 워치(참조 어댑터)에 새긴다
     carrier = MemoryCarrier()                      # 워치 대역 — 실기기 아님
@@ -61,22 +58,19 @@ def main(argv=None) -> int:
         _emit(f"[{SIMULATOR_BANNER}] 온바디 저장 실패: {errs[0]}")
         return 1
     stored = sum(len(v) for v in carrier._store.values())
-    _emit()
-    _emit(f"--- 장면 1: 등록 완료 · {SIMULATOR_BANNER} ---")
+    demo_ui.scene_header("장면 1: 등록 완료", SIMULATOR_BANNER)
     _emit(f"  기기 {len(original_refs)}대·루틴 "
           f"{len(app_state['profile']['routines'])}개 -> "
           f"온바디 {stored:,}B ({len(carrier._store)}개 레코드, 참조 어댑터)")
 
     # 장면 2: 앱 삭제·재설치 — 폰이 잊는다. 워치는 남는다.
     app_state.clear()
-    _emit()
-    _emit(f"--- 장면 2: 앱 삭제·재설치 · {SIMULATOR_BANNER} ---")
+    demo_ui.scene_header("장면 2: 앱 삭제·재설치", SIMULATOR_BANNER)
     _emit("  폰 로컬 상태: 전부 소실 (앱이 아는 것 = 없음)")
     _emit("  온바디(참조 어댑터): 유지 — 프로필 원본은 손목에 있다")
 
     # 장면 3: 복원 — 재등록 절차 없이, (옵션) 네트워크 없이
-    _emit()
-    _emit(f"--- 장면 3: 복원 · {SIMULATOR_BANNER} ---")
+    demo_ui.scene_header("장면 3: 복원", SIMULATOR_BANNER)
     if args.offline:
         import offline_guard
         try:
@@ -97,15 +91,19 @@ def main(argv=None) -> int:
     if restored_refs != original_refs:
         _emit(f"[{SIMULATOR_BANNER}] ⚠️ 복원 불일치 — 기기 목록이 다르다")
         return 1
-    _emit(f"  복원: 기기 {len(restored_refs)}대·루틴 "
-          f"{len(restored['routines'])}개 — 삭제 전과 일치")
+    demo_ui.transition_row(
+        "복원", "ok",
+        code_kv=f"기기 {len(restored_refs)}대·루틴 {len(restored['routines'])}개",
+        job="삭제 전과 일치")
     _emit("  재등록 0회 — 복원 경로에 기기 등록·ref 발급 코드가 존재하지 않는다")
 
-    # 경계 4: 종료 푸터 — 배너 1회
+    # 경계 4: 종료 푸터 — 배너 1회. 확정 마이크로카피(S2) 유지.
     _emit()
     _emit("폰은 잊었지만 손목이 기억한다 — 재등록 노동의 구조적 소멸 (FR4)")
-    _emit("복원에 클라우드 조회 0회 — \"원본이 서버에 없다\"(FR7)의 예고편")
-    _emit(f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 시연 아님")
+    _emit("참은 게 아니라 개입할 자리가 없다 — 복원에 클라우드 조회 0회, "
+          "\"원본이 서버에 없다\"(FR7)의 예고편")
+    demo_ui.honesty_footer(
+        [f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 시연 아님"])
     return 0
 
 

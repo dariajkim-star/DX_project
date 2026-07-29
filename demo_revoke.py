@@ -14,7 +14,8 @@ Epic 4의 마지막 장면. 온바디 구조의 가장 날카로운 반박 **"�
 import argparse
 import sys
 
-from appliance_sim.core import SIMULATOR_BANNER, console_safe
+import demo_ui
+from appliance_sim.core import SIMULATOR_BANNER
 from home_profile import (
     MemoryCarrier,
     data_residency,
@@ -32,8 +33,7 @@ _FRESH = [{"device_ref": "newac", "device_type": "air_conditioner",
            "capabilities": ["power"]}]
 
 
-def _emit(line=""):
-    print(console_safe(line))
+_emit = demo_ui.emit
 
 
 def _yn(v):
@@ -51,10 +51,8 @@ def main(argv=None) -> int:
     carrier = MemoryCarrier()
 
     # 경계 1: 기동 헤더 — 배너 1회
-    _emit("=" * 62)
-    _emit(f"  {SIMULATOR_BANNER}")
-    _emit("  프로필 폐기 — \"잃어버리면요?\"에 대한 답 (NFR2)")
-    _emit("=" * 62)
+    demo_ui.title_block(SIMULATOR_BANNER,
+                        "프로필 폐기 — \"잃어버리면요?\"에 대한 답 (NFR2)")
 
     # 장면 1: 폐기 전 — 온바디에 프로필이 있고 복원된다
     profile, on_rep = onboard_local(_DEVICES, carrier)
@@ -62,15 +60,13 @@ def main(argv=None) -> int:
         _emit(f"[{SIMULATOR_BANNER}] 온보딩 실패: {on_rep['errors'][0]}")
         return 1
     before = data_residency(profile, carrier)
-    _emit()
-    _emit(f"--- 장면 1: 폐기 전 · {SIMULATOR_BANNER} ---")
+    demo_ui.scene_header("장면 1: 폐기 전", SIMULATOR_BANNER)
     _emit(f"  온바디 레코드 {before['onbody_record_count']}개 · "
           f"{before['onbody_bytes']:,}B")
     _emit(f"  온바디만으로 복원 가능: {_yn(before['restorable_from_onbody'])}")
 
     # 장면 2: 폐기 — 서버 없이
-    _emit()
-    _emit(f"--- 장면 2: 폐기 실행 · {SIMULATOR_BANNER} ---")
+    demo_ui.scene_header("장면 2: 폐기 실행", SIMULATOR_BANNER)
     if args.offline:
         import offline_guard
         try:
@@ -86,24 +82,33 @@ def main(argv=None) -> int:
         _emit(f"[{SIMULATOR_BANNER}] 폐기 실패: {rep['errors'][0]}")
         return 1
     _emit(f"  레코드 {rep['records_erased']}개 삭제")
-    _emit(f"  폐기 후 복원 가능: {_yn(rep['restorable_after'])}  "
-          f"← 지웠다는 보고가 아니라 **복원 시도로 검증**")
-    residue = rep["residual_records"]
-    _emit(f"  잔류 레코드: {'판정 불가' if residue is None else f'{residue}건'}  "
-          f"← '복원 불가'와 '잔류 0'은 다른 주장이라 **둘 다** 확인한다")
+    _emit("  지웠다는 보고를 믿지 않고 복원을 시도해 검증한다 — "
+          "'복원 불가'와 '잔류 0'은 다른 주장이라 **둘 다** 확인 (아래 두 축)")
 
-    # 장면 3: 폐기 후 — 제어 불가
-    _emit()
-    _emit(f"--- 장면 3: 폐기 후 · {SIMULATOR_BANNER} ---")
-    restored, errs = restore_from_carrier(carrier)
-    _emit(f"  프로필 복원 시도: {'성공(!)' if restored else '실패'} — "
-          f"{'남의 손목에서도 집이 열린다' if restored else '그 프로필로는 가전을 못 연다'}")
+    # 장면 3: 폐기 후 — evidence_block. 두 축 전부 실측, "완료" 배지 없음:
+    # 두 증거 행 자체가 결론이다 (DESIGN.md evidence_block 규칙).
+    demo_ui.scene_header("장면 3: 폐기 후 — 검증 증거", SIMULATOR_BANNER)
+    restored, errs = restore_from_carrier(carrier)      # 축1 실측: 복원 시도
+    residue = rep["residual_records"]                   # 축2 실측: 잔류 스캔
+    if errs and not restored:
+        # 복원 실패의 원인이 폐기가 아니라 오류일 수 있다 — 증거 오염을 숨기지 않는다
+        _emit(f"  ⚠️ 복원 시도 중 오류 {len(errs)}건 — 아래 축1 '실패'가 폐기의 "
+              f"증거가 아닐 수 있음: {errs[0]}")
+    demo_ui.evidence_block([
+        ("복원 시도",
+         "성공(!) — 남의 손목에서도 집이 열린다" if restored
+         else "실패 — 그 프로필로는 가전을 못 연다",
+         bool(restored)),           # 실측 그대로: 실패=✗ — 그 ✗가 바라던 증거
+        ("잔류 스캔",
+         "판정 불가" if residue is None else f"잔류 {residue}건",
+         residue == 0),
+    ])
     if restored:
+        _emit("  ⚠️ 폐기 실패 — 위 축1의 '성공'은 재앙의 실측이다. 실패로 종료한다")
         return 1
 
     # 장면 4: 복구 — 폐기 후 재온보딩(AC3)
-    _emit()
-    _emit(f"--- 장면 4: 복구(재설정) · {SIMULATOR_BANNER} ---")
+    demo_ui.scene_header("장면 4: 복구(재설정)", SIMULATOR_BANNER)
     fresh, rep2 = onboard_local(_FRESH, carrier)
     if fresh is None:
         _emit(f"  재온보딩 실패: {rep2['errors'][0]}")
@@ -114,10 +119,12 @@ def main(argv=None) -> int:
     # 경계: 종료 푸터 — 배너 1회. 잔여 한계 정직 표기.
     _emit()
     _emit("잃어버려도 집은 남의 손목에 남지 않는다 — 서버 없이 폐기 (NFR2)")
-    _emit("  ※ 잔여 한계: **원격 소거가 아니다** — 캐리어 접근이 전제(회수·양도 전).")
-    _emit("     원격 소거는 서버·계정을 요구해 무계정 구조와 충돌한다. 기기 PIN이 1차 방어")
-    _emit("  상세: docs/REVOCATION.md · docs/THREAT_MODEL.md")
-    _emit(f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 시연 아님")
+    demo_ui.honesty_footer([
+        "※ 잔여 한계: **원격 소거는 없다** — 캐리어 접근이 전제(회수·양도 전).",
+        "   원격 소거는 서버·계정을 요구해 무계정 구조와 충돌한다. 기기 PIN이 1차 방어",
+        "상세: docs/REVOCATION.md · docs/THREAT_MODEL.md",
+        f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 시연 아님",
+    ])
     return 0
 
 

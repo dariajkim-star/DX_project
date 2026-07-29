@@ -14,7 +14,8 @@ Epic 4의 첫 장면. P-3("굳이 회원가입을 강요하는 이유가 뭡니�
 import argparse
 import sys
 
-from appliance_sim.core import SIMULATOR_BANNER, console_safe
+import demo_ui
+from appliance_sim.core import SIMULATOR_BANNER
 from home_profile import (
     LOCAL_CONSENT_SCOPE,
     MemoryCarrier,
@@ -32,8 +33,7 @@ _DEVICES = [
 ]
 
 
-def _emit(line=""):
-    print(console_safe(line))
+_emit = demo_ui.emit
 
 
 def main(argv=None) -> int:
@@ -47,10 +47,7 @@ def main(argv=None) -> int:
     carrier = MemoryCarrier()                      # 워치 대역 — 실기기 아님
 
     # 경계 1: 기동 헤더 — 배너 1회
-    _emit("=" * 62)
-    _emit(f"  {SIMULATOR_BANNER}")
-    _emit(f"  무계정 온보딩 — P-3 반박: \"{PAIN}\"")
-    _emit("=" * 62)
+    demo_ui.title_block(SIMULATOR_BANNER, f"무계정 온보딩 — P-3 반박: \"{PAIN}\"")
 
     # 온보딩 — 계정·로그인 없이
     if args.offline:
@@ -68,16 +65,21 @@ def main(argv=None) -> int:
         return 1
 
     # 경계 2: 온보딩 결과 — 배너 1회. 관찰한 것만 보고한다(측정 안 한 카운트 금지).
-    _emit()
-    _emit(f"--- 온보딩 완료 · {SIMULATOR_BANNER} ---")
-    _emit(f"  기기 연결 {report['devices_connected']}대 · 프로필 온바디 저장 완료")
+    demo_ui.scene_header("온보딩 완료", SIMULATOR_BANNER)
+    # 판정은 실측이다: 연결 수가 요청 기기 수와 일치할 때만 ✓ (상수 ok 금지 — 교훈 1)
+    demo_ui.transition_row(
+        "기기 연결",
+        "ok" if report["devices_connected"] == len(_DEVICES) else "blocked",
+        code_kv=f"devices_connected: {report['devices_connected']}",
+        job="프로필 온바디 저장 완료")
     _emit("  계정·로그인 요구: 없음 (아래 '요구하지 않는 것' 참조)")
     if args.offline:
         _emit("  오프라인 강제 안에서 완료 — 서버 조회가 불가한 상태에서 성공(구조 증명)")
 
     # 경계 3: 동의 범위 — 배너 1회. 정직한 최소.
-    _emit()
-    _emit(f"--- 동의 범위 · {SIMULATOR_BANNER} ---")
+    # 요구하는 것 vs 않는 것 대비 표 — 같은 서식, 같은 무게 (S4 대비 패턴)
+    demo_ui.scene_header("동의 범위 — 요구하는 것 vs 요구하지 않는 것",
+                         SIMULATOR_BANNER)
     _emit("  요구하는 것 (로컬 동작용):")
     for c in LOCAL_CONSENT_SCOPE:
         _emit(f"    · {c['item']} — {c['purpose']}")
@@ -85,11 +87,13 @@ def main(argv=None) -> int:
     for c in NOT_REQUIRED:
         _emit(f"    · {c['item']} — {c['why']}")
 
-    # 경계 4: 종료 푸터 — 배너 1회
+    # 경계 4: 종료 푸터 — 배너 1회. 확정 마이크로카피(S4) 유지.
     _emit()
     _emit("신원을 넘기지 않고 집을 연결했다 — 무계정은 결함이 아니라 셀링포인트 (FR6)")
-    _emit("서버가 원본을 갖지 않는다 — 데이터 소재 명시는 4.2(FR7)에서 이어진다")
-    _emit(f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 시연 아님")
+    _emit("계정을 참는 게 아니라 만들 자리가 없다 — 서버가 원본을 갖지 않는다. "
+          "데이터 소재 명시는 4.2(FR7)에서 이어진다")
+    demo_ui.honesty_footer(
+        [f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 시연 아님"])
     return 0
 
 

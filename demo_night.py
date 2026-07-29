@@ -21,7 +21,8 @@ Epic 2의 마지막 장면이자 발표 클라이맥스다. 지금까지의 모�
 import argparse
 import sys
 
-from appliance_sim.core import SIMULATOR_BANNER, ApplianceState, console_safe
+import demo_ui
+from appliance_sim.core import SIMULATOR_BANNER, ApplianceState
 from appliance_sim.transports.loopback import LoopbackTransport
 from home_profile import MemoryCarrier, execute_routine, serialize
 from home_profile import storage as st
@@ -76,8 +77,7 @@ def build_night_profile() -> dict:
     return p
 
 
-def _emit(line=""):
-    print(console_safe(line))
+_emit = demo_ui.emit
 
 
 def main(argv=None) -> int:
@@ -89,11 +89,8 @@ def main(argv=None) -> int:
     p.add_argument("--mtu", type=int, default=20, help="BLE 특성 MTU (기본 20)")
     args = p.parse_args(argv)
 
-    # 경계 1: 기동 헤더 — 배너 1회
-    _emit("=" * 62)
-    _emit(f"  {SIMULATOR_BANNER}")
-    _emit(f"  Night Keeper — \"{JOB}\"")
-    _emit("=" * 62)
+    # 경계 1: 기동 헤더 — 배너 1회 (S1 scene_header — Job 문장이 화면 상단에)
+    demo_ui.title_block(SIMULATOR_BANNER, f"Night Keeper — \"{JOB}\"")
 
     if args.offline:
         _offline_scene()
@@ -113,9 +110,8 @@ def main(argv=None) -> int:
     transports = {ref: LoopbackTransport(a) for ref, a in appliances.items()}
     _emit(f"온바디 저장: {len(data):,}B · 가전 {len(appliances)}대")
 
-    # 경계 2: 야간 모드 블록 — 배너 1회. Job 대응을 함께 보인다
-    _emit()
-    _emit(f"--- 야간 모드 전환 · {SIMULATOR_BANNER} ---")
+    # 경계 2: 야간 모드 블록 — 배너 1회. Job 대응을 함께 보인다 (실행 전 의도 표기)
+    demo_ui.scene_header("야간 모드 전환", SIMULATOR_BANNER)
     for _ref, _key, _val, job in _NIGHT_ACTIONS:
         _emit(f"  · {job}")
 
@@ -135,14 +131,24 @@ def main(argv=None) -> int:
         _emit(f"[{SIMULATOR_BANNER}] 실행 실패: {errs[0]}")
         return 1
 
-    # 경계 3: 상태 전이 블록 — 배너 1회
-    _emit()
-    _emit(f"--- 가전 상태 전이 · {SIMULATOR_BANNER} ---")
+    # 경계 3: 상태 전이 블록 — 배너 1회. 스트림 라인(dev_/seq=)은 형태 그대로,
+    # 그 **주변에** 전이 4행(판정+Job 대응)을 입힌다 — 발표자가 행 단위로 말을 얹는다.
+    demo_ui.scene_header("가전 상태 전이", SIMULATOR_BANNER)
     for ref in sorted(appliances):
         for ev in appliances[ref].events():
             for ch in ev["changes"]:
                 _emit("  %s seq=%d %s: %r -> %r"
                       % (ref, ev["seq"], ch["capability"], ch["old"], ch["new"]))
+    _emit()
+    for ref, key, val, job in _NIGHT_ACTIONS:
+        # 판정은 실측이다: 전이 후 상태가 의도값과 일치하는지 확인한 결과만 표기
+        applied = appliances[ref].snapshot()["state"].get(key) == val
+        # job 문자열 규약: "라벨 — Job 대응". 구분자가 없으면 중복 출력 대신 통짜 라벨.
+        parts = job.split(" — ", 1)
+        demo_ui.transition_row(parts[0],
+                               "ok" if applied else "blocked",
+                               code_kv=f"{key}: {val}",
+                               job=parts[1] if len(parts) > 1 else "")
 
     # 경계 4: 종료 푸터 — 배너 1회
     _emit()
@@ -152,7 +158,10 @@ def main(argv=None) -> int:
         _emit("오프라인 강제 완료 — 잠들기 전, 네트워크 없이, 손목만으로 성공했다")
         _emit("  SPOF(클라우드 단일 장애점) 제거 — LG 자기약속 'Effortless'의 실현")
     _emit(f"Job 실현: \"{JOB}\"")
-    _emit(f"[{SIMULATOR_BANNER}] — 이 산출물은 실가전 데이터가 아니다")
+    demo_ui.honesty_footer([
+        "child_lock은 시뮬레이터 상태 전이 — 안전 기능 아님(NFR5)",
+        f"[{SIMULATOR_BANNER}] — 이 산출물은 실가전 데이터가 아니다",
+    ])
     return 0
 
 
@@ -161,16 +170,20 @@ def _offline_scene():
     import socket
 
     import offline_guard
-    _emit()
-    _emit(f"--- 오프라인 강제 시연 · {SIMULATOR_BANNER} ---")
+    demo_ui.scene_header("오프라인 강제 시연", SIMULATOR_BANNER)
     with offline_guard.enforce_offline():
         try:
             socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             _emit("  차단 시연 실패 — 소켓이 열렸다(하네스 오작동)")
         except offline_guard.OfflineViolation:
-            _emit("  차단 시연: 소켓 열기 시도 -> 실패 확인 (하네스 활성)")
-    _emit("  ※ 한계: 이 차단은 '이 파이썬 프로세스가 못 나간다'까지다.")
-    _emit("    장비 차단(기내모드)은 사람이 누른다 — docs/DEMO_SCRIPT.md")
+            # ✗는 증거다 — 소켓 열기 실패가 바라던 결과 (DESIGN.md blocked 의미역)
+            demo_ui.transition_row("차단 시연: 소켓 열기 시도", "blocked",
+                                   code_kv="socket.socket -> OfflineViolation",
+                                   job="실패 확인 (하네스 활성)")
+    demo_ui.honesty_footer([
+        "※ 한계: 이 차단은 '이 파이썬 프로세스가 못 나간다'까지다.",
+        "  장비 차단(기내모드)은 사람이 누른다 — docs/DEMO_SCRIPT.md",
+    ])
 
 
 if __name__ == "__main__":

@@ -14,7 +14,8 @@ Epic 4의 마무리 축. 4.1(무계정)에 이어 **"그럼 내 데이터는 어
 import argparse
 import sys
 
-from appliance_sim.core import SIMULATOR_BANNER, console_safe
+import demo_ui
+from appliance_sim.core import SIMULATOR_BANNER
 from home_profile import MemoryCarrier, data_residency, onboard_local
 
 _DEVICES = [
@@ -26,8 +27,7 @@ _DEVICES = [
 ]
 
 
-def _emit(line=""):
-    print(console_safe(line))
+_emit = demo_ui.emit
 
 
 def _yn(v):
@@ -45,10 +45,9 @@ def main(argv=None) -> int:
     carrier = MemoryCarrier()
 
     # 경계 1: 기동 헤더 — 배너 1회
-    _emit("=" * 62)
-    _emit(f"  {SIMULATOR_BANNER}")
-    _emit("  데이터 소재 명시 — \"서버에 없다\"를 화면으로 증명 (FR7)")
-    _emit("=" * 62)
+    demo_ui.title_block(
+        SIMULATOR_BANNER,
+        "데이터 소재 명시 — \"서버에 없다\"를 화면으로 증명 (FR7)")
 
     profile, on_report = onboard_local(_DEVICES, carrier)   # 4.1 온보딩
     if profile is None:
@@ -69,9 +68,8 @@ def main(argv=None) -> int:
         _emit(f"[{SIMULATOR_BANNER}] 소재 확인 실패: {r['errors'][0]}")
         return 1
 
-    # 경계 2: 데이터 소재 — 배너 1회
-    _emit()
-    _emit(f"--- 데이터 소재 · {SIMULATOR_BANNER} ---")
+    # 경계 2: 데이터 소재 — 배너 1회. 소재 4행 표 — 전부 실측(data_residency 반환값).
+    demo_ui.scene_header("데이터 소재", SIMULATOR_BANNER)
     _emit(f"  원본 위치: {r['profile_location']}")
     _emit(f"  서버 원본 보유: {_yn(r['server_holds_original'])}")
     _emit(f"  서버로 전송되는 항목: "
@@ -80,8 +78,7 @@ def main(argv=None) -> int:
           f"← 원본이 온바디에 있다는 증거")
 
     # 경계 3: 온바디 footprint — 배너 1회. 종류·개수·바이트(이름 비노출).
-    _emit()
-    _emit(f"--- 온바디 footprint · {SIMULATOR_BANNER} ---")
+    demo_ui.scene_header("온바디 footprint", SIMULATOR_BANNER)
     k = r["onbody_kinds"]
     _emit(f"  레코드 {r['onbody_record_count']}개 "
           f"(meta {k['meta']}·기기 {k['device']}·루틴 {k['routine']}) · "
@@ -89,11 +86,14 @@ def main(argv=None) -> int:
     if args.offline:
         _emit("  오프라인 강제 활성 — 소재를 알아내는 데 서버가 필요 없음을 강제 증명")
 
-    # 경계 4: 종료 푸터 — 배너 1회
+    # 경계 4: 종료 푸터 — 배너 1회. 확정 마이크로카피(S5) 유지.
     _emit()
     _emit("서버에 없다 — 말이 아니라 관찰로 증명했다 (FR7, P-3 반박 마무리)")
-    _emit("  ※ 한계: 이 참조 어댑터·이 프로세스 범위. 실기기 데이터 흐름은 범위 밖")
-    _emit(f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 시연 아님")
+    _emit("옮길 수 없는 게 아니라 옮길 것이 없다 — 서버에 원본이 없으므로 (부재의 증명)")
+    demo_ui.honesty_footer([
+        "※ 한계: 이 참조 어댑터·이 프로세스 범위. 실기기 데이터 흐름은 범위 밖",
+        f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 시연 아님",
+    ])
     return 0
 
 
