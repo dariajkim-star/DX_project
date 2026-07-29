@@ -139,10 +139,14 @@ def main(argv=None) -> int:
 
     seg_path = OUT / "seg_members.csv"
     if seg_path.exists():
-        rows = [[run_id, x["응답번호"], x["LG가전수"], x["앱사용빈도"], x["연령대"],
-                 x["자녀유무"], x["점유형태_전월세"], x["이사계획"], x["구매계기_혼수"],
-                 x["P1경험"], x["P2경험"], x["P3부담"], x["워치보유"], x["야간사용"],
-                 x["온바디수용도"], x["지불의사"], x["segment"],
+        def _i(v):
+            """pandas 유래 "1.0" 문자열 → smallint. 빈 값은 NULL."""
+            return int(float(v)) if v not in ("", None) else None
+        rows = [[run_id, _i(x["응답번호"]), _i(x["LG가전수"]), _i(x["앱사용빈도"]),
+                 _i(x["연령대"]), _i(x["자녀유무"]), _i(x["점유형태_전월세"]),
+                 x["이사계획"], _i(x["구매계기_혼수"]),
+                 _i(x["P1경험"]), _i(x["P2경험"]), _i(x["P3부담"]), _i(x["워치보유"]),
+                 _i(x["야간사용"]), _i(x["온바디수용도"]), _i(x["지불의사"]), _i(x["segment"]),
                  "true"]   # ⚠️ NFR6: 현재 세그먼트는 전부 합성 패널 — 실설문 도착 시 갱신
                 for x in _read(seg_path)]
         loaded["mart.segments"] = _copy(

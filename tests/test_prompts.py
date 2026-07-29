@@ -47,13 +47,28 @@ def test_hypothesis_mode_b_has_no_quote_demands(moa):
     assert "가상의 고객 발언" in task
     assert "대표인용은 반드시 제공된 실데이터" not in task
     assert "강점 2~3개를 뽑아줘" not in task
-    assert "산출 불가(실데이터 없음)" in task
+    # v3.0: 자기 보고 신뢰도 폐지 — '산출 불가' 표기 요구 대신 작성 자체를 금지
+    assert "신뢰도 수치나 자기 평가는 작성하지 마" in task
+    assert "NN%" not in task
 
 
 def test_hypothesis_mode_e_confidence_not_numeric(moa):
-    dx = {"data_mode": "hypothesis"}
-    task, _ = moa.build_layer2({"A": "a", "B": "b", "C": "", "D": ""}, dx)["E"]
-    assert "산출 불가" in task
+    """v3.0: E도 어느 모드든 신뢰도 자기 보고를 요구하지 않는다 (G 감사 점수 체제)"""
+    for mode in ("real", "hypothesis"):
+        task, _ = moa.build_layer2({"A": "a", "B": "b", "C": "", "D": ""},
+                                   {"data_mode": mode})["E"]
+        assert "신뢰도 수치나 자기 평가는 작성하지 마" in task
+        assert "NN%" not in task
+
+
+def test_e_input_key_is_labeled_unverified(moa):
+    """v3.0(Winston 안): E 입력의 A는 미검증 라벨 키로만 전달된다 — 오염 경로 차단"""
+    task, payload = moa.build_layer2({"A": "a", "B": "b", "C": "", "D": ""},
+                                     {"data_mode": "real"})["E"]
+    assert "A_unverified_hypotheses" in payload
+    assert "A" not in payload  # 구 키 잔존 금지
+    assert "출력 전체" in task          # 금지 범위 확장 (Paige 문구)
+    assert "인구통계" in task
 
 
 def test_f_confidence_never_numeric(moa):
@@ -74,4 +89,5 @@ def test_load_dx_data_hypothesis_on_empty_dir(moa, tmp_path, monkeypatch):
     dx = moa.load_dx_data()
     assert dx["data_mode"] == "hypothesis"
     assert dx["payload"] is None
-    assert "산출 불가" in dx["instructions"]
+    # v3.0: 가설 모드 안내문도 자기 보고 대신 '작성 금지'를 지시한다
+    assert "신뢰도 수치나 자기 평가는 작성하지 마" in dx["instructions"]
