@@ -34,6 +34,16 @@ def test_preferences_survive_move_individually(capsys):
     assert "재설정 0회" in out
 
 
+def test_dehumidify_measured(capsys):
+    """제습 축 — 목표 습도 50%가 옛 집·새 집 모두 실행 실측된다."""
+    rc, out = _run(capsys)
+    assert rc == 0
+    assert out.count("humidity: 50") >= 2            # 옛 집 1회 + 새 집 2회 중 최소 2
+    assert "제습 — 목표 습도로" in out
+    # 습도값은 처방·권고가 아니다 — 화면에 '최적'류 문구 금지 (NFR5)
+    assert "최적" not in out
+
+
 def test_carrier_path_not_memory_bypass(capsys):
     """이사는 워치 복원 경유 — 메모리 원본 우회 금지 명시 (GPT F2)."""
     rc, out = _run(capsys)

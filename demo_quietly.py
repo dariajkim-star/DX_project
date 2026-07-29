@@ -35,9 +35,13 @@ QUIET_ROUTINE_INDEX = 0
 # T2 가설 라벨 — 발표 자료·화면에서 같은 문구를 쓴다 (PERSONA_LADDER §4).
 H3_LABEL = "Home Starter Couple — 가설(H3), 설문 검증 대기(문4·7-1·7-2)"
 
+# 목표 습도 — 국내 여름 가이드 40~60%의 중간값 (SURVEY 아님·건강 처방 아님,
+# 페르소나 선호 설정값. 근거: gpt-brief-quietly-home.md §온도값 근거)
+QUIET_HUMIDITY = 50
+
 # 옛 집 기기 — 부부가 함께 쓰는 물리 기기 (시뮬레이터).
 _OLD_DEVICES = [
-    ("old_ac", "air_conditioner", ["power", "target_temp", "fan_speed"]),
+    ("old_ac", "air_conditioner", ["power", "target_temp", "fan_speed", "humidity"]),
     ("old_cleaner", "robot_cleaner", ["power"]),
     ("old_light", "light", ["power"]),
     ("old_washer", "washer", ["power", "schedule"]),
@@ -46,7 +50,7 @@ _OLD_DEVICES = [
 # 새 집 기기 — 일부러 어긋나게: fan_speed 미지원, 청소기·세탁기 없음, 스타일러 신규.
 _NEW_DEVICES = [
     {"device_ref": "new_ac", "device_type": "air_conditioner",
-     "capabilities": ["power", "target_temp"]},
+     "capabilities": ["power", "target_temp", "humidity"]},
     {"device_ref": "new_light", "device_type": "light",
      "capabilities": ["power"]},
     {"device_ref": "new_styler", "device_type": "styler",
@@ -69,7 +73,8 @@ def build_couple_profile(temp: int) -> dict:
         for ref, dtype, caps in _OLD_DEVICES
     ]
     p["settings"] = {
-        "old_ac": {"power": True, "target_temp": temp, "fan_speed": "low"},
+        "old_ac": {"power": True, "target_temp": temp, "fan_speed": "low",
+                   "humidity": QUIET_HUMIDITY},
         "old_cleaner": {"power": False},
         "old_light": {"power": True},
         "old_washer": {"schedule": "standby"},
@@ -80,6 +85,9 @@ def build_couple_profile(temp: int) -> dict:
         "actions": [
             {"device_ref": "old_light", "setting_key": "power", "value": False},
             {"device_ref": "old_ac", "setting_key": "target_temp", "value": temp},
+            # 제습 — 습한 여름 밤, 에어컨 humidity 목표치 (mode:dry 계열 어휘)
+            {"device_ref": "old_ac", "setting_key": "humidity",
+             "value": QUIET_HUMIDITY},
         ],
     }]
     return p
@@ -141,6 +149,12 @@ def _one_touch(carrier, appliances, label, expected_temp) -> bool:
                 "에어컨 내 선호 온도로", "ok" if ok else "blocked",
                 code_kv=f"{ref} target_temp: {snap.get('target_temp')}",
                 job="내 값 — 배우자 값이 아니라")
+            h_ok = snap.get("humidity") == QUIET_HUMIDITY
+            all_ok = all_ok and h_ok
+            demo_ui.transition_row(
+                "제습 — 목표 습도로", "ok" if h_ok else "blocked",
+                code_kv=f"{ref} humidity: {snap.get('humidity')}",
+                job="습한 여름 밤, 눅눅하지 않게")
     if not all_ok:
         # blocked가 하나라도 있으면 데모는 실패다 — 성공 결론으로 못 간다 (F1)
         _emit(f"[{SIMULATOR_BANNER}] ⚠️ {label} 전이 실측 불일치 — 실패로 종료")
