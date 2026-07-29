@@ -375,6 +375,28 @@ So that 내 집이 남의 손목에 남지 않는다.
 
 ---
 
+## Epic 5: PostgreSQL 발견 트랙 — 포폴/운영 트랙 (발표 서사 밖)
+
+> **성격**: 제품 요구가 아니라 커리어 요구다(2026-07-22 결정 기록 —
+> [postgres-portfolio-track](../meetings/2026-07-22_postgres-portfolio-track.md)).
+> Epic 1~4·발표 서사 불가침. 발견 트랙 전용 — `home_profile/`·`appliance_sim/`은
+> DB를 영원히 모르고, 그 경계는 AST 테스트로 강제한다.
+
+### Story 5.1: Docker Postgres + 스키마 + 경계 테스트
+ops(runs)·mart(reviews·painpoints·strengths·competitor_reviews·segments·naver_testimony)
+스키마. `mart.segments.is_synthetic` 필수(합성 패널 NFR6). compose.yml로 재현,
+`down -v`로 원복. 처방 트랙의 DB 무지(無知)를 AST로 단언.
+
+### Story 5.2: 게이트 통과분만 적재
+`run_manifest.json` gate_status='passed'인 run만 `ops.runs`에 적재하고 mart를 채운다.
+"검증을 통과하지 못한 데이터는 DB에 존재하지 않는다" — test_gate.py 22개는 불변,
+DB는 게이트 하류.
+
+### Story 5.3: 서사 질의 세트
+H2 크로스탭(세그먼트×이사계획) · ThinQ vs SmartThings 평점 추이 ·
+run 간 P-1 언급률 변동(게이트 통과분만 — CSV로 불가능한 질문).
+면접 답변 축: "사본 지옥 → 단일 진실 원천" (용량 아님 — 동시성·SSOT·거버넌스·선언적 질의).
+
 ## 미해결·후속 (스토리로 만들지 않은 것)
 
 임의 창작 금지 원칙에 따라, 근거 문서에 정의가 없는 것은 스토리로 만들지 않았다.

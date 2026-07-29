@@ -1,0 +1,29 @@
+# Epic 5 — 발견 트랙 전용 PostgreSQL (docs/meetings/2026-07-22_postgres-portfolio-track.md)
+#
+#   기동:  ONME_DB_PASSWORD=<로컬비번> docker compose -f db/compose.yml up -d
+#   원복:  docker compose -f db/compose.yml down -v     # 흔적 없이 제거
+#
+# ⚠️ 비밀은 환경변수로만 (회의 §7-3) — 이 파일과 저장소에 비밀번호를 넣지 않는다.
+# ⚠️ 처방 트랙(home_profile/·appliance_sim/)은 이 DB의 존재를 모른다 —
+#    tests/test_db_boundary.py가 AST로 강제한다.
+services:
+  db:
+    image: postgres:16
+    container_name: onme_discovery_db
+    environment:
+      POSTGRES_DB: discovery
+      POSTGRES_USER: analyst
+      POSTGRES_PASSWORD: ${ONME_DB_PASSWORD:?ONME_DB_PASSWORD 환경변수를 설정하세요}
+    ports:
+      - "5433:5432"          # 로컬 기존 PG(5432)와 충돌 회피
+    volumes:
+      - onme_discovery_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analyst -d discovery"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  onme_discovery_data:
