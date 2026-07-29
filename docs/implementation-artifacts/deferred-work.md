@@ -30,3 +30,18 @@ code-review에서 실재하나 지금 조치하지 않기로 한 항목. 후속 
 - **전각/반각 혼합 폭 정렬** — boundary_table 라벨 패딩·title_block 62열 괘선이
   한글 전각 폭에서 어긋날 수 있음. 프로젝터 리허설(폰트 실측)과 함께 조정.
   blind 리뷰 Low.
+
+## Epic 5 Docker 실증 — 재부팅 대기 (2026-07-28)
+
+- 코드는 완성(0b36e67): compose·schema·load_mart·queries·경계 테스트 5 passed
+- Docker Desktop 4.79.0 기동 실패 — **좀비 유닉스 소켓 병리**: 앱이 만드는 소켓
+  파일(dockerInference·engine.sock)이 생성 직후 삭제 불가(`?????????` 속성)가 되어
+  다음 기동의 remove 단계에서 사망. `run`·`docker-secrets-engine` 디렉터리를
+  `*_stale`로 격리해도 새 소켓이 즉시 재감염 — 시스템 수준.
+- **처방: Windows 재부팅**(좀비 AF_UNIX 엔트리는 재부팅으로 소멸) 후
+  `ONME_DB_PASSWORD=<로컬비번> docker compose -f db/compose.yml up -d` →
+  `python db/load_mart.py` → `db/queries.sql` 실증.
+- WSL2 자체는 정상(docker-desktop 배포판 등록 확인). 회의록의 "WSL2 미확인"
+  리스크는 해소 — 병은 다른 곳에 있었다.
+- 격리 디렉터리 2개(`Docker/run_stale`·`docker-secrets-engine_stale`)는 재부팅 후
+  삭제 가능해지면 정리.
