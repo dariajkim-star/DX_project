@@ -24,8 +24,10 @@ import sys
 import demo_ui
 from appliance_sim.core import SIMULATOR_BANNER, ApplianceState
 from appliance_sim.transports.loopback import LoopbackTransport
-from home_profile import MemoryCarrier, execute_routine, map_to_new_home, serialize
+from home_profile import (MemoryCarrier, execute_routine, map_to_new_home,
+                          restore_from_carrier, serialize)
 from home_profile.schema import new_profile, validate_profile
+from home_profile.storage import persist_to_carrier
 
 RECORD = "profile"
 QUIET_ROUTINE_INDEX = 0
@@ -85,41 +87,64 @@ def build_couple_profile(temp: int) -> dict:
 
 def _persist(profile, label):
     """프로필 → 각자의 워치(캐리어). 반환 carrier | None."""
-    data, errs = serialize(profile)
-    if errs:
-        _emit(f"[{SIMULATOR_BANNER}] {label} 프로필 직렬화 실패: {errs[0]}")
-        return None
     carrier = MemoryCarrier()
-    if carrier.put_records({RECORD: data}):
-        _emit(f"[{SIMULATOR_BANNER}] {label} 캐리어 저장 실패")
+    errs = persist_to_carrier(profile, carrier)   # 워치 정체성 = 청크 레이아웃(FR4)
+    if errs:
+        _emit(f"[{SIMULATOR_BANNER}] {label} 워치 새김 실패: {errs[0]}")
         return None
     return carrier
 
 
 def _one_touch(carrier, appliances, label, expected_temp) -> bool:
-    """원터치 실행 + 실측 전이 표기. 반환 성공 여부."""
+    """원터치 실행 + 실측 전이 표기. 반환 성공 여부.
+
+    실행도 **워치 복원 경유**다 (GPT 리뷰 F2 강화): 메모리 원본이 아니라
+    캐리어에서 복원한 프로필만 실행한다. 복원본을 실행용 단일 레코드로
+    재직렬화하는 것은 프로세스 내 스테이징일 뿐 — 진실 원천은 워치다.
+    """
+    profile, r_errs = restore_from_carrier(carrier)
+    if r_errs or profile is None:
+        _emit(f"[{SIMULATOR_BANNER}] {label} 워치 복원 실패: "
+              f"{r_errs[0] if r_errs else '프로필 없음'}")
+        return False
+    data, s_errs = serialize(profile)
+    if s_errs:
+        _emit(f"[{SIMULATOR_BANNER}] {label} 직렬화 실패: {s_errs[0]}")
+        return False
+    exec_carrier = MemoryCarrier()
+    if exec_carrier.put_records({RECORD: data}):
+        _emit(f"[{SIMULATOR_BANNER}] {label} 실행 스테이징 실패")
+        return False
     transports = {ref: LoopbackTransport(a) for ref, a in appliances.items()}
-    result, errs = execute_routine(carrier, transports, RECORD,
+    result, errs = execute_routine(exec_carrier, transports, RECORD,
                                    QUIET_ROUTINE_INDEX)
     if errs:
         _emit(f"[{SIMULATOR_BANNER}] {label} 실행 실패: {errs[0]}")
         return False
-    # 판정은 실측: 실행 후 스냅샷이 루틴 의도값과 일치하는지 대조 (교훈 1)
+    # 판정은 실측: 실행 후 스냅샷이 루틴 의도값과 일치하는지 대조 (교훈 1).
+    # 초기 상태가 비어 있으므로 키의 **존재 자체**가 명령 적용의 증거다 —
+    # 실행기가 액션을 누락하면 값이 None이라 blocked가 뜬다 (GPT 리뷰 F4).
+    all_ok = True
     for ref, a in sorted(appliances.items()):
         snap = a.snapshot()["state"]
         if a.device_type == "light":
+            ok = "power" in snap and snap["power"] is False
+            all_ok = all_ok and ok
             demo_ui.transition_row(
-                "조명 끔", "ok" if snap.get("power") is False else "blocked",
+                "조명 끔", "ok" if ok else "blocked",
                 code_kv=f"{ref} power: {snap.get('power')}",
                 job="자는 사람의 방은 어둡게 유지")
         if a.device_type == "air_conditioner":
-            # 판정은 실측 — 실행 후 온도가 이 사람의 선호값과 일치할 때만 ✓ (교훈 1)
+            ok = snap.get("target_temp") == expected_temp
+            all_ok = all_ok and ok
             demo_ui.transition_row(
-                "에어컨 내 선호 온도로",
-                "ok" if snap.get("target_temp") == expected_temp else "blocked",
+                "에어컨 내 선호 온도로", "ok" if ok else "blocked",
                 code_kv=f"{ref} target_temp: {snap.get('target_temp')}",
                 job="내 값 — 배우자 값이 아니라")
-    return True
+    if not all_ok:
+        # blocked가 하나라도 있으면 데모는 실패다 — 성공 결론으로 못 간다 (F1)
+        _emit(f"[{SIMULATOR_BANNER}] ⚠️ {label} 전이 실측 불일치 — 실패로 종료")
+    return all_ok
 
 
 def main(argv=None) -> int:
@@ -161,8 +186,16 @@ def main(argv=None) -> int:
     # 장면 3: 이사 — 각자의 프로필이 각자 새 집에 매핑된다
     demo_ui.scene_header("장면 3: 이사 — 다른 집, 다른 기기", SIMULATOR_BANNER)
     _emit("  매칭(device_type + capability 교집합)은 처방 — VOC가 준 근거 아님")
+    _emit("  이사에 쓰는 프로필은 메모리 원본이 아니라 **워치에서 복원한 것**이다 —")
+    _emit("  '설정이 손목을 따라온다'는 주장은 캐리어 경유로만 증명된다")
     mapped = {}
-    for profile, who in ((asleep, "먼저 잔 사람"), (returner, "늦게 귀가한 사람")):
+    for carrier, who in ((c_asleep, "먼저 잔 사람"), (c_return, "늦게 귀가한 사람")):
+        # 원본 dict 우회 금지 (GPT 리뷰 F2) — 각자의 워치에서 복원해 매핑한다
+        profile, r_errs = restore_from_carrier(carrier)
+        if r_errs or profile is None:
+            _emit(f"[{SIMULATOR_BANNER}] {who} 워치 복원 실패: "
+                  f"{r_errs[0] if r_errs else '프로필 없음'}")
+            return 1
         result, report = map_to_new_home(profile, _NEW_DEVICES)
         if result is None:
             _emit(f"[{SIMULATOR_BANNER}] {who} 매핑 실패: {report['errors'][0]}")
@@ -184,29 +217,31 @@ def main(argv=None) -> int:
         _emit(f"  {who}:")
         demo_ui.held_summary(transferred_n, held_rows, total_old)
 
-    # 장면 4: 새 집 — 재설정 0회, 같은 원터치, 각자의 값 그대로
+    # 장면 4: 새 집 — 재설정 0회, 같은 원터치, **두 사람 다 실행으로 증명** (F3)
     demo_ui.scene_header("장면 4: 새 집 — 재설정 0회, 같은 원터치", SIMULATOR_BANNER)
-    c_new = _persist(mapped["늦게 귀가한 사람"], "새 집")
-    if c_new is None:
-        return 1
-    new_appliances = {d["device_ref"]: ApplianceState(
-        d["device_ref"], d["device_type"], d["capabilities"])
-        for d in _NEW_DEVICES}
-    if not _one_touch(c_new, new_appliances, "새 집", expected_temp=26):
-        return 1
-    # 배우자 값의 생존도 실측으로 — 매핑된 프로필의 설정에서 읽는다 (표시만).
-    asleep_temp = None
-    for _ref, kv in mapped["먼저 잔 사람"]["settings"].items():
-        if "target_temp" in kv:
-            asleep_temp = kv["target_temp"]
-    _emit(f"  먼저 잔 사람의 프로필도 따라왔다 — 매핑된 설정의 선호 온도: "
-          f"{asleep_temp}도 (각자의 값이 각자의 워치에)")
+    for who, temp, subtitle in (
+            ("늦게 귀가한 사람", 26, "이사 첫날 밤, 현관 앞"),
+            ("먼저 잔 사람", 24, "다음날, 이번엔 이 사람이 늦다")):
+        c_new = _persist(mapped[who], f"{who} 새 워치")
+        if c_new is None:
+            return 1
+        # 각자의 원터치는 각자의 새 가전 상태에서 실측한다
+        new_appliances = {d["device_ref"]: ApplianceState(
+            d["device_ref"], d["device_type"], d["capabilities"])
+            for d in _NEW_DEVICES}
+        _emit(f"  {who} — {subtitle}:")
+        if not _one_touch(c_new, new_appliances, f"새 집({who})",
+                          expected_temp=temp):
+            return 1
 
-    # 경계 5: 종료 푸터 — 배너 1회
+    # 경계 5: 종료 푸터 — 배너 1회. 결론은 입증 범위까지만 (F6):
+    # 증명한 것은 '지원되는 설정의 무재설정 재적용'이지 이탈 방지 자체가 아니다.
     _emit()
-    _emit("설정은 한 번, 집은 계속 바뀌어도 — 이사가 이탈의 순간이 되지 않는다")
+    _emit("설정은 한 번, 집은 계속 바뀌어도 — 지원되는 설정은 재설정 없이 "
+          "이사를 건넜고, 안 되는 것은 사유와 함께 보류됐다")
     demo_ui.honesty_footer([
         H3_LABEL,
+        "'이사가 이탈의 순간이 되지 않는다'는 설계 의도(가설) — 이탈 방지 자체는 미측정",
         "매칭 알고리즘은 처방(설계 결정) — VOC 근거 아님",
         "멀티 프로필 충돌(같은 기기·다른 선호)은 다음 단계 — 여기선 각자 실행이라 충돌 없음",
         f"[{SIMULATOR_BANNER}] 참조 어댑터 기반 — 실기기(가민) 아님",

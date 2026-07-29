@@ -25,13 +25,34 @@ def test_runs_clean(capsys):
 
 
 def test_preferences_survive_move_individually(capsys):
-    """이사 후에도 26(귀가자)과 24(먼저 잔 사람)가 각자 생존 — 실측 출력."""
+    """이사 후 26(귀가자)·24(먼저 잔 사람) **둘 다 실행 실측**으로 생존 (GPT F3)."""
     rc, out = _run(capsys)
     assert rc == 0
     scene4 = out.split("장면 4")[1]
-    assert "target_temp: 26" in scene4               # 귀가자의 값이 새 집에서 실행됨
-    assert "24도" in scene4                          # 배우자 값도 따라옴 (표시)
+    assert "target_temp: 26" in scene4               # 귀가자의 원터치 실행 실측
+    assert "target_temp: 24" in scene4               # 먼저 잔 사람도 실행 실측 (표시 아님)
     assert "재설정 0회" in out
+
+
+def test_carrier_path_not_memory_bypass(capsys):
+    """이사는 워치 복원 경유 — 메모리 원본 우회 금지 명시 (GPT F2)."""
+    rc, out = _run(capsys)
+    assert "워치에서 복원한 것" in out
+
+
+def test_failed_transition_fails_process(capsys, monkeypatch):
+    """전이 실측 불일치 시 rc 1 — 성공 결론 출력 금지 (GPT F1)."""
+    import demo_quietly as dq
+
+    def _noop_execute(carrier, transports, record, idx, mtu=20):
+        return {"devices_commanded": 0, "reassembled_by": "noop"}, []
+
+    monkeypatch.setattr(dq, "execute_routine", _noop_execute)
+    rc = dq.main([])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "실측 불일치" in out
+    assert "이사를 건넜고" not in out                # 성공 결론이 안 나와야 함
 
 
 def test_held_items_have_reasons(capsys):
@@ -43,11 +64,15 @@ def test_held_items_have_reasons(capsys):
 
 
 def test_one_touch_not_sensing(capsys):
-    """교훈 9: '알아서'(감지·학습 함의) 부재, 원터치 명시."""
+    """교훈 9: 긍정형 감지 문구까지 차단 (GPT F5 — '감지' 존재만으론 부족)."""
     rc, out = _run(capsys)
     assert "알아서" not in out
     assert "원터치" in out
-    assert "감지" in out                             # "감지가 아니다" 명시 문구
+    # 부정 문장은 정확히 존재해야 하고
+    assert "수면 감지·위치·배우자 상태 공유 없음" in out
+    # 긍정형 감지 회귀는 금지
+    for banned in ("감지 후", "감지 완료", "자동 감지", "감지되"):
+        assert banned not in out
 
 
 def test_hypothesis_label_present(capsys):

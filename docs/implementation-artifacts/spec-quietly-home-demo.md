@@ -2,7 +2,7 @@
 title: 'Quietly Home 데모 — 부부 2프로필 × 이사: 설정은 한 번, 집은 계속 바뀌어도'
 type: 'feature'
 created: '2026-07-28'
-status: 'in-review'
+status: 'done'
 baseline_commit: '42e0b57'
 context:
   - '{project-root}/docs/REVIEW_PLAYBOOK.md'
