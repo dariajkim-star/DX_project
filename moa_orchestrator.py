@@ -17,6 +17,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import sys
 import time
 from datetime import datetime
@@ -42,6 +43,44 @@ NO_SEARCH_CAVEAT = (" [중요] 너에게는 검색 도구나 검증된 외부 �
                     "시장 수치·경쟁사 기능·트렌드를 사실로 단정하지 말고, 모든 수치·기능 주장에 "
                     "'(미검증 — 조사 필요)'를 표기하며, 마지막에 '조사 필요 항목' 목록을 작성해.")
 
+# v2.9: E의 인구통계 페르소나 날조 3회 연속(김민수·김영희·김영희) 차단.
+# 프로젝트에 이미 확정된 페르소나가 있으므로 새로 지어내게 두지 않고 정본을 주입한다.
+# 정본 출처: docs/PERSONA_LADDER.md · docs/PERSONA_NIGHT_KEEPER.md
+#            docs/implementation-artifacts/spec-quietly-home-demo.md
+# v2.9.1(daria 결정 2026-07-29): 둘 다 사다리 등재. 실행마다 orchestrator가 랜덤으로
+# 하나를 지정하고, 환경변수 PERSONA_FORCE("Night Keeper"|"Quietly Home")로 강제 가능.
+PERSONA_DESCS = {
+    "Night Keeper": (
+        "Night Keeper (등급 T1 — 실측): 잡(Job) = '내가 잠든 뒤에도 집이 아이를 지킨다'. "
+        "폰·앱을 켜지 않고 손목 조작만으로 여러 기기를 한 번에 밤 상태로 전환하려 한다. "
+        "겨냥 Pain = P-1(서버·앱이 죽으면 제어 불능)."),
+    "Quietly Home": (
+        "Quietly Home (등급 T2 — 가설, 설문 검증 대기): 잡 = '설정은 한 번, 집은 계속 "
+        "바뀌어도'. 부부 2인이 각자 프로필(각자 선호 온도)을 가지고, 이사·재설치를 겪어도 "
+        "설정이 따라오기를 바란다. 겨냥 Pain = P-2(재등록·설정 휘발), P-3(개인정보 요구). "
+        "[표기 의무] '가설 — 설문 검증 대기'를 반드시 병기해라."),
+}
+
+
+def persona_canon() -> tuple:
+    """(선택된 페르소나 이름, E용 페르소나 규칙 텍스트) 반환.
+    PERSONA_FORCE 환경변수가 정본 이름과 일치하면 강제, 아니면 랜덤."""
+    force = os.environ.get("PERSONA_FORCE", "").strip()
+    if force in PERSONA_DESCS:
+        pick, how = force, "강제 지정(PERSONA_FORCE)"
+    else:
+        pick, how = random.choice(list(PERSONA_DESCS)), "랜덤 선택"
+    rule = (
+        " [페르소나 규칙 — 최우선] 이 프로젝트에는 팀이 확정한 페르소나 정본이 있다. "
+        "새 페르소나를 창작하지 말고, 이번 실행에 지정된 아래 페르소나를 "
+        "VOC 근거로 심화하는 방식으로만 작성해.\n"
+        "지정 페르소나: " + PERSONA_DESCS[pick] + "\n"
+        "[금지] 나이·성별·직업·거주지·가족구성 등 인구통계를 지어내지 마라. "
+        "입력 데이터(플레이스토어 리뷰)에는 인구통계 컬럼이 존재하지 않으므로 "
+        "어떤 인구통계도 근거가 없다. 페르소나는 잡(Job)과 겪는 Pain으로만 기술한다.")
+    print(f"[OK] E 페르소나 배정: {pick} ({how})")
+    return pick, rule
+
 # v2.8: prompt injection 완화 — 인라인 태그 격리는 데이터가 닫는 태그를 포함하면
 # 탈출 가능(tag breakout). 따라서 '작업 지시는 system 메시지, 외부 데이터는 별도
 # user 메시지의 JSON 값'으로 메시지 수준에서 분리한다. JSON 직렬화가 구분자를
@@ -61,8 +100,7 @@ SECURITY_RULES = (
 NO_DATA_NOTE = (
     "\n실데이터가 없으므로 가설 초안을 작성하되 모든 항목에 "
     "'가설(실데이터 검증 필요)'를 표기해. "
-    "신뢰도는 반드시 '## PainPoint 분석 신뢰도: 산출 불가(실데이터 없음)'라고만 표기하고 "
-    "임의의 수치(NN%)를 만들지 마.")
+    "신뢰도 수치나 자기 평가는 작성하지 마 — 신뢰도 산출은 검수 단계 담당이다.")
 
 
 # ---------- 계보 게이트 (v2.6) ----------
@@ -334,17 +372,19 @@ def load_dx_data() -> dict:
 def build_layer1(dx: dict) -> dict:
     # v2.7: 가설 모드에서는 대표인용·강점 요구 자체를 제거 — "실데이터에서만 인용"과
     # "실데이터 없음"이 한 프롬프트에 공존해 가짜 인용을 유발하는 지시 충돌 해소
+    # v3.0(파티 평결 2026-07-29): B의 자기 보고 신뢰도 제거 — 3회 연속 출처 날조
+    # ("내부 데이터 분석, 2023"×2, "LG ThinQ 사용자 리뷰, 2023"×1)로 정보 가치가
+    # 음수가 됐다. 신뢰도는 G가 감사 점수로 직접 산출한다(CLAUDE.md v2.9 §신뢰도).
     if dx["data_mode"] == "real":
         b_task = ("부정 의견을 토픽별로 그룹핑해 표(토픽/대표인용/언급비중/심각도)로 정리하고, "
                   "지켜야 할 강점 2~3개를 뽑아줘. 대표인용은 반드시 제공된 실데이터의 "
                   "대표리뷰·긍정 리뷰에서만 인용해. "
-                  "마지막에 반드시 '## PainPoint 분석 신뢰도: NN%' 형식으로 "
-                  "전체 분석의 신뢰도와 그 근거를 명시해. ")
+                  "신뢰도 수치나 자기 평가는 작성하지 마 — 신뢰도 산출은 검수 단계 담당이다. ")
     else:
         b_task = ("실데이터가 없으므로 가설 Pain Point 토픽만 표(토픽/예상 언급비중/심각도)로 "
                   "작성해. 대표인용과 지켜야 할 강점은 '미보고(실데이터 없음)'로만 표기하고, "
                   "가상의 고객 발언을 절대 만들지 마. "
-                  "신뢰도는 '## PainPoint 분석 신뢰도: 산출 불가(실데이터 없음)'로만 표기해. ")
+                  "신뢰도 수치나 자기 평가는 작성하지 마 — 신뢰도 산출은 검수 단계 담당이다. ")
     # v2.8: 각 값은 (작업 지시=system, 데이터 payload=user JSON) 튜플
     return {
         "A": (f"너는 시장 조사 애널리스트야. 분석 대상: {SERVICE}. "
@@ -367,15 +407,25 @@ def build_layer2(r: dict, dx: dict) -> dict:
     인라인 태그 방식은 출력에 닫는 태그가 섞이면 탈출 가능했음(tag breakout)"""
     layer2 = {}
     if r["A"] and r["B"]:
-        if dx["data_mode"] == "real":
-            e_conf = "마지막에 '## 타겟 정의 신뢰도: NN%'를 근거와 함께 명시하고, "
-        else:
-            e_conf = ("B가 가설 모드이므로 '## 타겟 정의 신뢰도: 산출 불가(실데이터 없음)'로만 "
-                      "표기하고 임의 수치를 만들지 마. ")
-        layer2["E"] = ("너는 CX 전략 기획자야. user 메시지 JSON의 A(시장)와 B(VOC) 결과를 "
+        # v3.0(파티 평결 2026-07-29, Winston 안):
+        # - A 키를 "A_unverified_hypotheses"로 개명 — A의 미검증 수치가 E 출력에서
+        #   표기를 떼고 사실로 굳는 오염 경로(인구통계 3회→시장 수치→세그먼트) 차단
+        # - 금지 규칙 적용 범위를 페르소나 한정에서 출력 전체로 확장 (Paige 문구)
+        # - 자기 보고 신뢰도 제거 (B와 동일 사유 — G가 감사 점수로 산출)
+        layer2["E"] = ("너는 CX 전략 기획자야. user 메시지 JSON의 "
+                       "A_unverified_hypotheses(시장 — 전량 미검증 가설)와 B(VOC 실측)를 "
                        "교차 분석해 세그먼트 2~3개, 1차 타겟 선정 근거 3가지, 페르소나 1명을 "
-                       "작성해. " + e_conf + "A·B가 모순되면 별도 보고해.",
-                       {"data_type": "untrusted_agent_output", "A": r["A"], "B": r["B"]})
+                       "작성해. "
+                       "[적용 범위: 출력 전체 — 세그먼트·선정 근거·페르소나 모두] "
+                       "A_unverified_hypotheses의 수치·인구통계·전망은 어디에도 사실로 쓰지 마. "
+                       "인용해야 하면 반드시 '(미검증 — 조사 필요)'를 붙이고, 연령대·성별 등 "
+                       "인구통계는 세그먼트 이름·설명에도 넣지 마 — 입력 리뷰 데이터에 "
+                       "인구통계 컬럼이 없기 때문이다. "
+                       "신뢰도 수치나 자기 평가는 작성하지 마 — 신뢰도 산출은 검수 단계 담당이다. "
+                       "A·B가 모순되면 별도 보고해."
+                       + persona_canon()[1],
+                       {"data_type": "untrusted_agent_output",
+                        "A_unverified_hypotheses": r["A"], "B": r["B"]})
     if r["C"] and r["D"]:
         # v2.6: C·D는 항상 미검증(검색 없음) — F의 수치 신뢰도 산출 금지
         layer2["F"] = ("너는 신사업 전략가야. user 메시지 JSON의 C(경쟁사)와 D(트렌드) 결과를 "
