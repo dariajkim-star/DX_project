@@ -210,7 +210,7 @@ function createSurveyForm(confirmToken) {
 
 /** 수정 전 백업: 기존 응답 전체를 로그로 덤프 */
 function dumpResponses() {
-  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  const form = FormApp.openById(LIVE_FORM_ID);
   const rs = form.getResponses();
   Logger.log('총 응답 수: ' + rs.length);
   rs.forEach(function (r, i) {
@@ -228,7 +228,7 @@ function dumpResponses() {
  *    실행 전 dumpResponses()로 백업할 것.
  */
 function applyV2() {
-  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  const form = FormApp.openById(LIVE_FORM_ID);
   const L5 = ['1 전혀 없다', '2 없다', '3 보통', '4 자주 있다', '5 매우 자주 있다'];
   const items = form.getItems();
   function find(prefix) {
@@ -329,7 +329,7 @@ function applyV2() {
  *       핵심 타겟 포함 구조(Night Keeper = 잡 기반이지 유자녀가 아니다).
  */
 function applyV3() {
-  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  const form = FormApp.openById(LIVE_FORM_ID);
   const items = form.getItems();
   function find(prefix) {
     for (var i = 0; i < items.length; i++) {
@@ -433,7 +433,7 @@ function applyV3() {
  * 이 함수는 폼을 수정하지 않는다 (읽기 전용).
  */
 function verifyForm() {
-  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  const form = FormApp.openById(LIVE_FORM_ID);
   const items = form.getItems();
   let fail = 0, pass = 0;
 
@@ -537,7 +537,7 @@ function verifyForm() {
  *  - 공유/개인화 니즈(H3)는 온바디 구조의 '계정 집중' 반박과 직결
  */
 function applyV4() {
-  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  const form = FormApp.openById(LIVE_FORM_ID);
   const items = form.getItems();
   function find(prefix) {
     for (var i = 0; i < items.length; i++) {
@@ -604,7 +604,7 @@ function applyV4() {
 
 /** v4 자동 검수 — verifyForm() 통과 후 추가 실행. 읽기 전용. */
 function verifyFormV4() {
-  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  const form = FormApp.openById(LIVE_FORM_ID);
   var pass = 0, fail = 0;
   function check(label, cond, detail) {
     if (cond) { pass++; Logger.log('[PASS] ' + label); }
@@ -665,7 +665,7 @@ function verifyFormV4() {
  * 실행: fixNoticeV5() → verifyNoticeV5() 순서. FAIL 0 확인 후 채널 게시.
  */
 function fixNoticeV5() {
-  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  const form = FormApp.openById(LIVE_FORM_ID);
 
   // ── 0. 폼 제목 — 실측 "3분 설문"이었다 (verifyNoticeV5 2026-07-31 15:15 로그).
   //       applyV3에 setTitle('…5분 설문')이 있으나 라이브 폼에는 반영되지 않은 상태였다.
@@ -695,7 +695,7 @@ function fixNoticeV5() {
  * 본확산 응답이 통째로 날아간다 — 그래서 수신 상태를 게이트에 넣는다.
  */
 function verifyNoticeV5() {
-  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  const form = FormApp.openById(LIVE_FORM_ID);
   let pass = 0, fail = 0;
   function check(label, cond, detail) {
     if (cond) { pass++; Logger.log('  OK   ' + label); }
