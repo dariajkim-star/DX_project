@@ -12,7 +12,7 @@
 
 | 라벨 | 의미 |
 |---|---|
-| `[실측]` | 본 프로젝트가 직접 생산한 데이터 — 크롤링 VOC 74,434건, 부정 리뷰 7,625건 토픽 분석, 프로토타입 테스트 426 passed, PostgreSQL 적재 실증 등. 원본 파일 인용 가능 |
+| `[실측]` | 본 프로젝트가 직접 생산한 데이터 — 크롤링 VOC 74,434건, 부정 리뷰 7,625건 토픽 분석, PoC 테스트 426 passed, PostgreSQL 적재 실증 등. 원본 파일 인용 가능 |
 | `[공개출처]` | 실존 공개 자료 — 출처 기관·연도 병기. 수치를 직접 확인하지 못한 경우 "최신 공표치로 대체" 주석 |
 | `[가정]` | 시뮬레이션을 위해 설정한 값 — 실발주 시 재산정 대상. 근거 없는 단정 금지 |
 
@@ -53,6 +53,6 @@
 
 - VOC: `dx_pipeline_v2.2/data/painpoints.csv` — 부정 리뷰 7,625건 기준 P-1 43.4%
 - 페르소나: [PERSONA_LADDER.md](../../PERSONA_LADDER.md) — T1/T2/T3 등급제
-- 프로토타입: `home_profile/` 13 스토리 + Quietly Home 데모, 테스트 426 passed
+- 시뮬레이터 PoC: `home_profile/` 13 스토리 + Quietly Home 데모, 테스트 426 passed
 - 검증 체계: [G_AUDIT_SCORE.md](../../G_AUDIT_SCORE.md) — MoA 감사 점수 97.6점
 - 보안·프라이버시: THREAT_MODEL · CONSENT_SCOPE · DATA_RESIDENCY · REVOCATION

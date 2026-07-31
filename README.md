@@ -10,7 +10,9 @@
 > `SERVICE`·`APP_ID` 확정, `FEATURE_COLUMNS`만 설문 설계 대기.
 > 현재 확정 내용: [docs/CX_DEFINITION.md](docs/CX_DEFINITION.md) · 결정 이력: [docs/DECISIONS.md](docs/DECISIONS.md)
 >
-> **프로토 제품명: ThinQ OnMe** (2026-07-22). 온바디 홈 프로필 제품 코드는
+> **PoC 제품명: ThinQ OnMe** (2026-07-22). 단계 라벨은
+> [docs/MATURITY_POSITION.md](docs/MATURITY_POSITION.md)가 단일 출처다 — 현재 **PoC / TRL 3~4**.
+> 온바디 홈 프로필 제품 코드는
 > [home_profile/](home_profile/)에 있으며(스키마 v1.0.0 + 저장·크기 예산),
 > 홈 프로필 명세는 [docs/PROFILE_SCHEMA.md](docs/PROFILE_SCHEMA.md) 참조.
 

@@ -10,7 +10,8 @@
 > **"집이 나를 따라온다 (Home Follows You)"**
 > — ThinQ VOC가 실증한 클라우드 종속 Pain을, 워치에 담긴 Portable Home Profile로 풀다
 >
-> **프로토 제품명: ThinQ OnMe** (2026-07-22 확정) — 집이 따라와서 *내 몸으로(On Me)*.
+> **PoC 제품명: ThinQ OnMe** (2026-07-22 확정) — 집이 따라와서 *내 몸으로(On Me)*.
+> 단계 라벨 단일 출처: [MATURITY_POSITION.md](MATURITY_POSITION.md) (현재 PoC / TRL 3~4).
 > 표시명 `ThinQ OnMe` / 코드 토큰 `thinq-onme`. 파이썬 패키지 `home_profile/`은
 > 내부 자료구조 계보라 제품명과 분리 유지. 합성패널 내부도구 `ThinQ Village`와 톤 구분.
 
