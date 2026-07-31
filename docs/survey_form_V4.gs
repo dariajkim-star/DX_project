@@ -1,12 +1,50 @@
+/** 실배포 중인 본 폼. 이 폼이 살아 있는 한 새 폼을 만들 이유가 없다. */
+const LIVE_FORM_ID = '1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU';
+
+/**
+ * 중복 생성 가드 (2026-07-31 신설)
+ *
+ * 왜: 편집기 함수 드롭다운의 기본값이 파일 첫 함수(createSurveyForm)라,
+ *     검수 함수를 돌리려다 그대로 실행 → 사본 폼이 생긴다. 07-31에 실제로 발생했고
+ *     드라이브의 기존 사본 3개도 같은 경로로 추정된다(SURVEY_DEPLOY §적용 이력).
+ *     사본이 배포되면 v3 이전 문항 응답이 v4 데이터에 섞인다.
+ *
+ * 동작: 본 폼이 열리면 예외를 던져 중단한다. 드롭다운 실행은 인자가 없으므로 항상 막힌다.
+ *       진짜로 새 폼이 필요하면 createSurveyForm('NEW-FORM-INTENDED')로 호출할 것.
+ */
+function guardAgainstDuplicate_(confirmToken) {
+  if (confirmToken === 'NEW-FORM-INTENDED') {
+    Logger.log('⚠️ 가드 해제됨 — 의도적 신규 폼 생성으로 진행');
+    return;
+  }
+  let live = null;
+  try { live = FormApp.openById(LIVE_FORM_ID); } catch (e) { live = null; }
+  if (live) {
+    throw new Error(
+      '중단: 본 폼이 이미 존재한다 — "' + live.getTitle() + '" (' + LIVE_FORM_ID + ').\n' +
+      '새 폼을 만들면 사본이 늘어나 오배포 위험이 생긴다.\n' +
+      '· 문항 수정이 목적이면: applyV3 / applyV4 / fixNoticeV5 중 해당 함수를 실행할 것\n' +
+      '· 검수가 목적이면: verifyForm / verifyFormV4 / verifyNoticeV5\n' +
+      '· 그래도 새 폼이 필요하면: createSurveyForm(\'NEW-FORM-INTENDED\')'
+    );
+  }
+  Logger.log('가드 통과 — 본 폼을 찾을 수 없어 신규 생성으로 진행');
+}
+
 /**
  * SURVEY_PLAN v2 → Google Form 생성 스크립트
  * 실행: script.google.com 새 프로젝트에 붙여넣고 createSurveyForm 실행
  * 실행 후 로그(보기>로그 또는 Ctrl+Enter)에 편집 URL / 응답 URL 출력
  *
+ * ⚠️ 본 폼이 살아 있으면 가드가 막는다(guardAgainstDuplicate_). 이미 배포된 폼을
+ *    고치려는 것이라면 이 함수가 아니라 apply / fix 계열을 쓸 것.
+ *
  * 구조: 섹션1(안내+문1 스크리닝) →[분기]→ 섹션2(문2~7) → 섹션3(문8~10 Pain)
  *       → 섹션4(문11~15) → 제출 / 0대는 종료 섹션 → 제출
  */
-function createSurveyForm() {
+function createSurveyForm(confirmToken) {
+  guardAgainstDuplicate_(confirmToken);
+
   const form = FormApp.create('스마트홈(ThinQ) 사용 경험 5분 설문');
 
   form.setDescription(

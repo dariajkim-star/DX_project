@@ -159,6 +159,17 @@
 문서 내부 제목도 "— 응답하지 마세요"로 통일. **본 폼**(`1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU`,
 §폼 URL)만 실배포 대상 — 위 3개는 채널 게시에 절대 사용 금지.
 
+### 재발 방지 — 중복 생성 가드 (2026-07-31)
+
+07-31에 같은 사고가 재현됐다(사본 1건 생성 → 즉시 폐기). 원인은 편집기 함수 드롭다운의
+기본값이 파일 첫 함수 `createSurveyForm`이라는 것 — 검수를 돌리려다 그대로 실행된다.
+기존 사본 3개도 이 경로로 생긴 것으로 추정된다.
+
+→ `createSurveyForm`에 **`guardAgainstDuplicate_()`** 를 걸었다
+([survey_form_V4.gs](survey_form_V4.gs) 파일 상단). 본 폼이 열리면 예외를 던져 중단하며,
+드롭다운 실행은 인자가 없으므로 **항상 막힌다.** 의도적 신규 생성은
+`createSurveyForm('NEW-FORM-INTENDED')`로만 가능하다.
+
 ## 남은 일 (2026-07-31 갱신)
 
 **차단 해소 (본확산 선행)**
