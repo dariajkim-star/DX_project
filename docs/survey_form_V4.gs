@@ -611,3 +611,82 @@ function verifyFormV4() {
   if (fail > 0) Logger.log('!! FAIL이 0이 될 때까지 배포 금지');
   return { pass: pass, fail: fail };
 }
+
+/**
+ * v5 안내문 정정 (2026-07-31) — 익명 고지 자기모순 해소
+ *
+ * 문제: 안내문이 "🎁 …연락처는 추첨 희망자만 선택 입력"과
+ *       "(개인 식별 정보 수집 없음)"을 동시에 말한다. 문16(연락처)이 실재하므로
+ *       후자는 무조건 부정으로 쓰면 거짓이 된다.
+ *       → SURVEY_PLAN §1 모집 3원칙은 "익명(연락처는 추첨 희망자만 선택)"으로
+ *         조건부 표기를 규정했다. 안내문만 그 조건을 잃어버린 상태.
+ *       "필수 18→20문항" 정정과 같은 실패 유형 — 고지가 실제와 다르면 3원칙 자기모순.
+ *
+ * 변경은 안내문 1개뿐이다. 문항은 건드리지 않는다 → 기존 응답 보존.
+ *
+ * 실행: fixNoticeV5() → verifyNoticeV5() 순서. FAIL 0 확인 후 채널 게시.
+ */
+function fixNoticeV5() {
+  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+
+  form.setDescription(
+    '안녕하세요! LG 스마트가전(ThinQ) 사용 경험에 대한 짧은 설문입니다.\n\n' +
+    '⏱ 약 5분 소요 (필수 20문항)\n' +
+    '🎁 응답자 중 추첨 5명께 기프티콘을 드립니다 (연락처는 추첨 희망자만 마지막에 선택 입력)\n\n' +
+    '· 본 설문은 LG전자 공식 설문이 아니며, 개인 리서치 프로젝트입니다.\n' +
+    '· 익명으로 진행되며, 응답은 통계 분석 목적으로만 사용 후 폐기됩니다.\n' +
+    '· 수집 항목: 가전 사용 경험·가구 형태 등 아래 문항 응답.\n' +
+    '  연락처를 남기지 않으시면 개인 식별 정보는 수집되지 않으며,\n' +
+    '  남기신 연락처는 추첨·경품 발송에만 쓰고 발송 후 폐기합니다.'
+  );
+  Logger.log('안내문 v5 정정 완료 — 익명 고지를 조건부로 변경');
+  Logger.log('다음: verifyNoticeV5() 실행 후 FAIL 0 확인');
+}
+
+/**
+ * v5 안내문 검수 + 배포 직전 게이트 (2026-07-31)
+ *
+ * 안내문 정합뿐 아니라 "게시해도 응답이 실제로 저장되는가"를 함께 본다.
+ * 07-28 파일럿 3건 소실(원인 미상, SURVEY_DEPLOY §배포 이력)이 재발하면
+ * 본확산 응답이 통째로 날아간다 — 그래서 수신 상태를 게이트에 넣는다.
+ */
+function verifyNoticeV5() {
+  const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
+  let pass = 0, fail = 0;
+  function check(label, cond, detail) {
+    if (cond) { pass++; Logger.log('  OK   ' + label); }
+    else { fail++; Logger.log('  FAIL ' + label + (detail ? ' — ' + detail : '')); }
+  }
+
+  const d = form.getDescription();
+
+  // ── A. 안내문 정합
+  check('안내문 "필수 20문항"', d.indexOf('필수 20문항') !== -1);
+  check('안내문 "약 5분 소요"', d.indexOf('약 5분 소요') !== -1);
+  check('안내문 LG 공식 아님 고지', d.indexOf('공식 설문이 아니며') !== -1);
+  check('안내문 무조건 부정 문구 제거',
+        d.indexOf('(개인 식별 정보 수집 없음)') === -1,
+        '문16 연락처가 실재하므로 무조건 부정은 거짓 고지');
+  check('안내문 조건부 익명 고지', d.indexOf('연락처를 남기지 않으시면') !== -1);
+  check('안내문 연락처 용도·폐기 고지', d.indexOf('발송 후 폐기') !== -1);
+
+  // ── B. 폼 제목 — 모집글의 "5분"과 일치해야 한다
+  check('폼 제목 "5분 설문"', form.getTitle().indexOf('5분 설문') !== -1,
+        '실측: ' + form.getTitle());
+
+  // ── C. 익명 수집 설정 (v3에서 확정한 값이 유지되는지)
+  check('이메일 수집 off', form.collectsEmail() === false);
+  check('1인 1응답 off (구글 로그인 미강요)', form.hasLimitOneResponsePerUser() === false);
+
+  // ── D. 배포 직전 게이트 — 응답이 실제로 저장되는 상태인가
+  check('응답 수신 중 (게시 가능 상태)', form.isAcceptingResponses(),
+        '수신 중지 상태 — 07-28 파일럿 3건 소실의 미검증 가설 중 하나. ' +
+        '게시 전 반드시 켤 것');
+
+  const n = form.getResponses().length;
+  Logger.log('  INFO 현재 응답 ' + n + '건 (07-29 실사 기준 4건 — 증가분이 없으면 확인 필요)');
+
+  Logger.log('=== verifyNoticeV5 결과: PASS ' + pass + ' / FAIL ' + fail + ' ===');
+  if (fail > 0) Logger.log('!! FAIL이 0이 될 때까지 채널 게시 금지');
+  return { pass: pass, fail: fail };
+}
