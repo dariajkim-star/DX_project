@@ -629,6 +629,12 @@ function verifyFormV4() {
 function fixNoticeV5() {
   const form = FormApp.openById('1x-JqmEHcyfekFUC2FHKnAKbk_QrnFi5WhlgdFQPNWUU');
 
+  // ── 0. 폼 제목 — 실측 "3분 설문"이었다 (verifyNoticeV5 2026-07-31 15:15 로그).
+  //       applyV3에 setTitle('…5분 설문')이 있으나 라이브 폼에는 반영되지 않은 상태였다.
+  //       안내문·모집글은 전부 5분이라 제목만 3분이면 같은 자기모순 — 여기서 맞춘다.
+  form.setTitle('스마트홈(ThinQ) 사용 경험 5분 설문');
+  Logger.log('0. 폼 제목 정정 (3분 → 5분 설문)');
+
   form.setDescription(
     '안녕하세요! LG 스마트가전(ThinQ) 사용 경험에 대한 짧은 설문입니다.\n\n' +
     '⏱ 약 5분 소요 (필수 20문항)\n' +
