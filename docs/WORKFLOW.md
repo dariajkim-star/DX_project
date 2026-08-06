@@ -80,6 +80,11 @@ flowchart LR
 
 ## 4. ThinQ Village — 합성패널 (synthetic_panel.py v1.1)
 
+> **⛔ 실모드 실행 불가 (2026-08-06)** — NDA로 설문 트랙이 종료돼 `survey.csv`가
+> 생기지 않는다. L112~120의 실해시 대조 게이트가 구조적으로 막으며, **우회하지 않는다.**
+> 파이프라인 검증용 `--demo`(워터마크 유지)만 허용하고 **발표에는 쓰지 않는다.**
+> 단일 출처: [SURVEY_TRACK_CLOSURE.md](SURVEY_TRACK_CLOSURE.md)
+
 설문 응답자를 LLM 페르소나로 확장해 **홀드아웃 문항으로 자기검증**하고 가격 what-if,
 시나리오 반응(이사 당일), 세그먼트 간 상호작용 2라운드를 돌리는 단계. 04가 v2.9에서 새로 내놓는 `seg_manifest.json`·`seg_members.csv`가
 게이트의 전제라서, 04가 v2.9 미만이면 패널은 실행 자체가 되지 않는다.

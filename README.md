@@ -1,14 +1,19 @@
 # DX_project — CX 분석 파이프라인 + MoA 오케스트레이터
 
-리뷰·설문 데이터로 **타겟 세그먼트**와 **Pain Point**를 정량 도출하고(DX 파이프라인),
+공개 리뷰 데이터로 **타겟 세그먼트**와 **Pain Point**를 정량 도출하고(DX 파이프라인),
 그 산출물을 근거로 GPT 서브 에이전트(A~F)와 Claude Code(G)가 CX 보고서를 만드는(MoA)
 프로젝트입니다.
 
 > **상태 (2026-07-21)**: 주제 확정 — **"집이 나를 따라온다 (Home Follows You)"**
 > (ThinQ VOC 실증 Pain → 캐리어 중립 온바디 홈 프로필). 본수집 **74,434건** 완료
 > (ThinQ 17,446 전량 + SmartThings 24,805 대조군 + 네이버 4축 매트릭스 32,183).
-> `SERVICE`·`APP_ID` 확정, `FEATURE_COLUMNS`만 설문 설계 대기.
+> `SERVICE`·`APP_ID` 확정.
 > 현재 확정 내용: [docs/CX_DEFINITION.md](docs/CX_DEFINITION.md) · 결정 이력: [docs/DECISIONS.md](docs/DECISIONS.md)
+>
+> **⛔ 설문 트랙 종료 (2026-08-06)** — NDA로 응답 수집·활용 금지.
+> `FEATURE_COLUMNS` 설문 확정·T2 승격/기각·합성패널 실모드는 **미실행 동결**.
+> VOC 계보(위 74,434건)는 공개 리뷰 직접 수집분이라 무관·유효.
+> 단일 출처: [docs/SURVEY_TRACK_CLOSURE.md](docs/SURVEY_TRACK_CLOSURE.md)
 >
 > **PoC 제품명: ThinQ OnMe** (2026-07-22). 단계 라벨은
 > [docs/MATURITY_POSITION.md](docs/MATURITY_POSITION.md)가 단일 출처다 — 현재 **PoC / TRL 3~4**.
