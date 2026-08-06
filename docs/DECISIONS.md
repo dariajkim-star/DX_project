@@ -20,6 +20,7 @@
 | 2026-07-28 | **UX 계약 확정** — 주 계약 = 데모 CLI 프레젠테이션 층(대본 §6~§12 7장면 1:1), 제품 UI는 "손목 1장" 스케치만(미구현 표기). 미구현 화면 추가 창작 금지 | [DESIGN.md](planning-artifacts/ux-designs/ux-thinq-onme-2026-07-28/DESIGN.md)·[EXPERIENCE.md](planning-artifacts/ux-designs/ux-thinq-onme-2026-07-28/EXPERIENCE.md) |
 | 2026-07-31 | **성숙도 라벨 확정 — "PoC / TRL 3~4"** + 문서 용어 통일(프로토타입→시뮬레이터 PoC). "MVP·파일럿(제품 단계)" 발화 금지. 설문 "파일럿"은 조사방법론 용어로 존치, 과거 기록 미수정 | [MATURITY_POSITION.md](MATURITY_POSITION.md) |
 | 2026-08-06 | **설문 트랙 종료 — NDA로 응답 수집·활용 금지** (daria 확인). 대안 A+B 채택: T2 "가설 — 검증 미실행(NDA)" 동결(기각 아님) + 공개 2차 자료로 배경만 보강(`[공개출처]`, 검증 아닌 정황). C(합성패널 hypothesis 모드 발표 활용)는 기각. H3는 VOC 대체 불가 실측 확인(혼수 4·입주 2건/12,585). VOC 74,434건 계보는 무관·유효. TRL 판정 무영향 | [SURVEY_TRACK_CLOSURE.md](SURVEY_TRACK_CLOSURE.md) |
+| 2026-08-06 | **B 공개 2차 자료 조사 완료 — 채택 기준 확정**: 원출처 재접속 대조 통과분만 채택하고, ①기준 연도 미상 ②원출처 미확인(인용의 인용) ③기존 실측과 수배 차이 중 하나라도 걸리면 **제외**한다(스마트홈 51.3% 제외 사례). 출처 간 불일치는 유리한 쪽 선택 금지·**병기 강제**(스마트워치 12.9% vs 33%). 민간 조사는 표본 편향 단서 필수 | [PUBLIC_STATS_B.md](PUBLIC_STATS_B.md) |
 | 2026-07-28 | **페르소나 등급제(T1/T2/T3) + 타깃 이층 구조** — 근거 타깃 Night Keeper(T1) / 사업 타깃 30대 맞벌이(T2·H3). 무게중심 이동은 설문이 결정. 설문 v4(문4 세분·문7-1/7-2 신설) | [PERSONA_LADDER.md](PERSONA_LADDER.md)·SURVEY_PLAN v4 |
 
 ## ❓ 열린 질문 (사람 판단 대기 — 코드 결함 아님)
