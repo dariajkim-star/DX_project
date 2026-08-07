@@ -86,13 +86,18 @@ form-factor: **원형 AMOLED 워치** (260px 원형 기준, 검정 배경 — AM
 
 ---
 
-## 3. Figma 재제작 (daria 지시 2026-08-06)
+## 3. Figma 화면설계서 (✅ 제작 완료 2026-08-06)
 
-이 문서를 원본 계약으로 Figma에 화면설계서를 제작한다. 원칙:
+> **https://www.figma.com/design/swyyFTH2NDa0yfUnAfP1ZY** — "ThinQ OnMe 화면설계서"
+> (Jeongeun Kim의 팀 드래프트)
 
-- **이 문서 밖 화면을 Figma에서 창작하지 않는다** (프레임 수 = SCR-C01~07 + SCR-W01)
-- 시각 값은 DESIGN.md frontmatter(터미널 색·D2Coding·watch_bg #000000 등)를 그대로 쓴다
-- 목업 정정 1건(§2)을 반영한다
+- 섹션 2개: 접근면 A(SCR-C01~07 터미널 프레임 7개) · 접근면 B(SCR-W01 워치 + 정직 표기 + 별칭 규칙)
+- **이 문서 밖 화면은 창작하지 않았다** — 프레임 수 = 계약 그대로 8개
+- 시각 값은 DESIGN.md frontmatter 그대로: 터미널 `#0D1117`/accent `#58A6FF`/보류 `#D29922`/
+  증거 `#F85149`·`#3FB950`, 워치 `#000000`. 폰트는 D2Coding 부재로 **계약 2순위 폴백
+  Cascadia Code** 사용(주석·워치는 Noto Sans KR)
+- 목업 정정 1건 반영: "설문 검증 대기" → **"인구통계 검증 미실행(NDA)"** — 정정 이력을
+  캡션에 그대로 남김
 
 ---
 
